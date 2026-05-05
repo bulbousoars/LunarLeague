@@ -34,6 +34,11 @@ func runWorker(ctx context.Context, cfg *config.Config) {
 
 	mailer := notify.NewSMTPMailer(cfg.SMTP)
 	notify.LogSMTPStartup(cfg.SMTP)
+	go func() {
+		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		notify.LogSMTPReachability(pctx, cfg.SMTP)
+	}()
 
 	var dp provider.DataProvider
 	switch cfg.DataProvider {

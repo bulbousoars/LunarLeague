@@ -15,8 +15,9 @@ This guide gets you from "fresh Linux box" to "your buddies are signing up" in a
 ```bash
 git clone https://github.com/bulbousoars/LunarLeague.git
 cd LunarLeague/deploy
-cp .env.example .env
-$EDITOR .env   # set domain, secrets, SMTP creds
+cp .env.production.example .env   # production VPS (HTTPS + real SMTP); see comments inside
+# Or: cp .env.example .env            # local/dev-oriented defaults (Mailhog when using make dev)
+$EDITOR .env
 docker compose --env-file .env up -d --build
 ```
 
