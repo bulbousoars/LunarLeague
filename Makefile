@@ -1,8 +1,8 @@
-.PHONY: help dev down logs build api-build web-build migrate migrate-down sqlc seed test test-go test-web lint lint-go lint-web fmt fmt-go fmt-web clean
+.PHONY: help dev down logs build api-build web-build migrate migrate-down sqlc seed test test-go test-web lint lint-go lint-web fmt fmt-go fmt-web clean prod-up prod-down prod-logs prod-migrate
 
 # Use deploy/.env for compose
 COMPOSE := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env
-COMPOSE_PROD := docker compose -f deploy/docker-compose.yml --env-file deploy/.env
+COMPOSE_PROD := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.caddy.yml --env-file deploy/.env
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -63,3 +63,15 @@ fmt-web:
 clean:
 	$(COMPOSE) down -v
 	rm -rf apps/api/bin apps/api/tmp apps/web/.next apps/web/node_modules
+
+prod-up: ## Production stack with TLS (Caddy); needs deploy/.env (see deploy/.env.production.example)
+	$(COMPOSE_PROD) up -d --build --remove-orphans
+
+prod-down: ## Stop production stack (TLS overlay)
+	$(COMPOSE_PROD) down
+
+prod-logs: ## Tail production logs (api, worker, web, caddy)
+	$(COMPOSE_PROD) logs -f --tail=100
+
+prod-migrate: ## Run DB migrations against production compose stack
+	$(COMPOSE_PROD) run --rm api migrate up

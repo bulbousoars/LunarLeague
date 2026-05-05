@@ -53,7 +53,7 @@ This brings up:
 - API at <http://localhost:8000>
 - Web at <http://localhost:3000>
 
-For production deployment behind Caddy with TLS see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md). Optional: GitHub Actions **Deploy production** (`.github/workflows/deploy.yml`) — run it manually under **Actions** after configuring `LUNARLEAGUE_*` secrets; add a `push` trigger there if you want deploy-on-push.
+For production deployment behind Caddy with TLS see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md): copy `deploy/.env.production.example` to `deploy/.env`, fill secrets + SMTP, then from repo root run **`make prod-up`** (or use `deploy/scripts/prod-deploy.sh` on the server). Optional: GitHub Actions **Deploy production** (`.github/workflows/deploy.yml`) — run it manually under **Actions** after configuring `LUNARLEAGUE_*` secrets; add a `push` trigger there if you want deploy-on-push.
 
 ## Architecture
 

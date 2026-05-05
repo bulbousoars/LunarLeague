@@ -3,7 +3,7 @@
 #   LUNARLEAGUE_SSH_HOST      — hostname or IP of the VPS
 #   LUNARLEAGUE_SSH_USER      — SSH login user
 #   LUNARLEAGUE_SSH_KEY       — private key (full PEM, including BEGIN/END lines)
-#   LUNARLEAGUE_DEPLOY_DIR    — absolute deploy dir on server (docker-compose.yml + .env)
+#   LUNARLEAGUE_DEPLOY_DIR    — absolute path to LunarLeague/deploy on server (compose files + .env)
 # Optional:
 #   LUNARLEAGUE_DEPLOY_BRANCH — defaults to main when unset
 # After secrets exist, you may add `push: branches: [main]` under `on:` for deploy-on-push.
@@ -39,4 +39,8 @@ jobs:
             git fetch origin "$BRANCH"
             git checkout "$BRANCH"
             git reset --hard "origin/$BRANCH"
-            docker compose --env-file .env up -d --build --remove-orphans
+            if [ -f docker-compose.caddy.yml ]; then
+              docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env up -d --build --remove-orphans
+            else
+              docker compose -f docker-compose.yml --env-file .env up -d --build --remove-orphans
+            fi

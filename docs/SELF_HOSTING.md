@@ -18,7 +18,7 @@ cd LunarLeague/deploy
 cp .env.production.example .env   # production VPS (HTTPS + real SMTP); see comments inside
 # Or: cp .env.example .env            # local/dev-oriented defaults (Mailhog when using make dev)
 $EDITOR .env
-docker compose --env-file .env up -d --build
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env up -d --build
 ```
 
 That brings up:
@@ -28,34 +28,32 @@ That brings up:
 - `api` (Go HTTP + WebSocket server on :8000)
 - `worker` (Go background worker for sync, waivers, digests)
 - `web` (Next.js standalone server on :3000)
+- `caddy` (TLS on :80 / :443 when using [`docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml))
 
-The `api` service publishes `:8000` so a reverse proxy can sit in front.
+The `api` and `web` services still publish their ports on the host for debugging; in production you can firewall those and rely on Caddy only.
 
-### Putting Caddy in front for TLS
+From the **repository root** you can also run `make prod-up` (same compose merge + `deploy/.env`).
 
-Add Caddy as another service in `docker-compose.yml`:
+### Repeatable deploy on the VPS
 
-```yaml
-caddy:
-  image: caddy:2-alpine
-  restart: unless-stopped
-  ports: ["80:80", "443:443"]
-  volumes:
-    - ./Caddyfile:/etc/caddy/Caddyfile
-    - caddy_data:/data
-    - caddy_config:/config
-  environment:
-    CADDY_DOMAIN: ${CADDY_DOMAIN}
-    CADDY_EMAIL: ${CADDY_EMAIL}
-  depends_on: [api, web]
+After DNS points at the server and `.env` is filled, use [`deploy/scripts/prod-deploy.sh`](../deploy/scripts/prod-deploy.sh) from the repo root:
+
+```bash
+chmod +x deploy/scripts/prod-deploy.sh
+./deploy/scripts/prod-deploy.sh          # git pull + rebuild
+MIGRATE=1 ./deploy/scripts/prod-deploy.sh   # also run migrations
 ```
+
+### TLS without editing base compose
+
+[`deploy/docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml) layers Caddy on top of [`deploy/docker-compose.yml`](../deploy/docker-compose.yml). Set **`CADDY_DOMAIN`** and **`CADDY_EMAIL`** in `.env` for Let's Encrypt.
 
 The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `/ws/*` to the API, and everything else to Next.js.
 
 ## First-run checklist
 
-1. `docker compose run --rm api migrate up`
-2. `docker compose run --rm api seed` (inserts NFL/NBA/MLB rows in the `sports` table)
+1. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api migrate up`
+2. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api seed` (inserts NFL/NBA/MLB rows in the `sports` table)
 3. Open `https://your-domain/` and sign in with magic link.
 4. Create your league. The first user becomes the commissioner.
 
@@ -63,14 +61,14 @@ The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `
 
 | Task | Command |
 | --- | --- |
-| Tail logs | `docker compose logs -f api worker web` |
-| Re-sync players | `docker compose restart worker` (next tick syncs) |
-| Backup DB | `docker compose exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB > backup.sql` |
-| Update | `git pull && docker compose --env-file .env up -d --build` (from your `deploy/` directory) |
+| Tail logs | `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env logs -f api worker web caddy` |
+| Re-sync players | `docker compose ... restart worker` (next tick syncs) |
+| Backup DB | `docker compose ... exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB > backup.sql` |
+| Update | `git pull && docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env up -d --build` (from `deploy/`) |
 
 ### Automated deploy from GitHub Actions
 
-If this repo is on GitHub, workflow **Deploy production** (`.github/workflows/deploy.yml`) SSHes into your VPS when you run it from **Actions → Deploy production → Run workflow**. Add repository secrets `LUNARLEAGUE_SSH_HOST`, `LUNARLEAGUE_SSH_USER`, `LUNARLEAGUE_SSH_KEY`, and `LUNARLEAGUE_DEPLOY_DIR` (absolute path on the server to the folder that contains `docker-compose.yml` and `.env`). To deploy on every push to `main`, add a `push` trigger back to that workflow after secrets are configured.
+If this repo is on GitHub, workflow **Deploy production** (`.github/workflows/deploy.yml`) SSHes into your VPS when you run it from **Actions → Deploy production → Run workflow**. Add repository secrets `LUNARLEAGUE_SSH_HOST`, `LUNARLEAGUE_SSH_USER`, `LUNARLEAGUE_SSH_KEY`, and `LUNARLEAGUE_DEPLOY_DIR` (absolute path on the server to **`LunarLeague/deploy`** — the folder that contains `docker-compose.yml`, optional `docker-compose.caddy.yml`, and `.env`). The workflow merges `docker-compose.caddy.yml` automatically when that file exists. To deploy on every push to `main`, add a `push` trigger back to that workflow after secrets are configured.
 
 Point **`PUBLIC_WEB_URL`** and **`PUBLIC_API_URL`** in `.env` at your real HTTPS domain (e.g. `https://fantasy.yourdomain.com`) so magic-link and league emails link correctly.
 

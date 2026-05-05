@@ -1,0 +1,27 @@
+# TLS termination + HTTPS for Lunar League (use with base docker-compose.yml).
+# Usage (from repo root, after deploy/.env is configured):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.caddy.yml --env-file deploy/.env up -d --build
+#
+# Requires CADDY_DOMAIN and CADDY_EMAIL in .env (Let's Encrypt ACME).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
+      CADDY_EMAIL: ${CADDY_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
