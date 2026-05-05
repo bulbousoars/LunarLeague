@@ -68,7 +68,7 @@ The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `
 
 ### Automated deploy from GitHub Actions
 
-If this repo is on GitHub, enable workflow **Deploy production** (`.github/workflows/deploy.yml`): add repository secrets `LUNARLEAGUE_SSH_HOST`, `LUNARLEAGUE_SSH_USER`, `LUNARLEAGUE_SSH_KEY`, and `LUNARLEAGUE_DEPLOY_DIR` (absolute path on the server to the folder that contains `docker-compose.yml` and `.env`). Each push to `main` then pulls that commit and rebuilds containers; you can also run the workflow manually under **Actions**.
+If this repo is on GitHub, workflow **Deploy production** (`.github/workflows/deploy.yml`) SSHes into your VPS when you run it from **Actions → Deploy production → Run workflow**. Add repository secrets `LUNARLEAGUE_SSH_HOST`, `LUNARLEAGUE_SSH_USER`, `LUNARLEAGUE_SSH_KEY`, and `LUNARLEAGUE_DEPLOY_DIR` (absolute path on the server to the folder that contains `docker-compose.yml` and `.env`). To deploy on every push to `main`, add a `push` trigger back to that workflow after secrets are configured.
 
 Point **`PUBLIC_WEB_URL`** and **`PUBLIC_API_URL`** in `.env` at your real HTTPS domain (e.g. `https://fantasy.yourdomain.com`) so magic-link and league emails link correctly.
 
