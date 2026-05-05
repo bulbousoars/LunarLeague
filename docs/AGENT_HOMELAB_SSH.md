@@ -48,3 +48,17 @@ If `BAO_TOKEN` is already set to a token that can sign via `ssh/sign/<role>-agen
 - Wrapping tokens are **single-use**; reuse fails by design.
 - Example internal target: **`docker-infra` at `192.168.1.111`**; **Lunar League** on VM 218 is documented in the proxmox memory file (`192.168.1.218`, compose under `/mnt/storage/docker/lunarleague/app`).
 - If certificates are rejected as **not yet valid**, check **host clock skew** (see proxmox notes for `mediaprod` NTP).
+
+## Updating live Lunar League on VM 218
+
+After broker SSH as `cursor-agent` (or your admin principal):
+
+```bash
+cd /mnt/storage/docker/lunarleague/app
+chmod +x deploy/scripts/update-realestate-host.sh   # once
+./deploy/scripts/update-realestate-host.sh
+```
+
+That pulls **`main`** and rebuilds with **`docker-compose.yml` + `docker-compose.realestate.yml`** and **`deploy/.env`** (Traefik fronts TLS; this stack does not use `docker-compose.caddy.yml` on 218).
+
+Ensure production `.env` still has correct **`SMTP_*`** and **`SMTP_ALLOW_PLAINTEXT=false`** for port 587 STARTTLS.
