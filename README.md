@@ -55,6 +55,8 @@ This brings up:
 
 For production deployment behind Caddy with TLS see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md): copy `deploy/.env.production.example` to `deploy/.env`, fill secrets + SMTP, then from repo root run **`make prod-up`** (or use `deploy/scripts/prod-deploy.sh` on the server). Optional: GitHub Actions **Deploy production** (`.github/workflows/deploy.yml`) — run it manually under **Actions** after configuring `LUNARLEAGUE_*` secrets; add a `push` trigger there if you want deploy-on-push.
 
+Maintainers using **OpenBao SSH CA + wrapped broker** from Windows to reach the homelab: [docs/AGENT_HOMELAB_SSH.md](docs/AGENT_HOMELAB_SSH.md).
+
 ## Architecture
 
 - **Backend**: Go 1.23, chi, sqlc + pgx, river for jobs
