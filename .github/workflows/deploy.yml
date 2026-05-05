@@ -1,0 +1,47 @@
+# After pushing to `main`, SSH into your VPS and rebuild containers so your
+# production host serves the new images.
+#
+# Repo → Settings → Secrets and variables → Actions → New repository secret:
+#   LUNARLEAGUE_SSH_HOST      — hostname or IP of the VPS
+#   LUNARLEAGUE_SSH_USER      — SSH login user
+#   LUNARLEAGUE_SSH_KEY       — private key (full PEM, including BEGIN/END lines)
+#   LUNARLEAGUE_DEPLOY_DIR    — absolute path to deploy dir on the server (folder with docker-compose.yml + .env)
+#
+# Optional:
+#   LUNARLEAGUE_DEPLOY_BRANCH — defaults to main when unset (use bash ${BRANCH:-main} in script)
+#
+# SSH uses port 22. For a non-standard port, fork this workflow or wrap SSH config on the server.
+
+name: Deploy production
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: lunarleague-deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Git pull + Docker Compose rebuild
+        uses: appleboy/ssh-action@v1.2.3
+        with:
+          host: ${{ secrets.LUNARLEAGUE_SSH_HOST }}
+          username: ${{ secrets.LUNARLEAGUE_SSH_USER }}
+          key: ${{ secrets.LUNARLEAGUE_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="${{ secrets.LUNARLEAGUE_DEPLOY_DIR }}"
+            BRANCH="${{ secrets.LUNARLEAGUE_DEPLOY_BRANCH }}"
+            BRANCH="${BRANCH:-main}"
+            cd "$DEPLOY_DIR"
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            docker compose --env-file .env up -d --build --remove-orphans

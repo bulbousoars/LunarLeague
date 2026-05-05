@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lunarleague
+          POSTGRES_USER: lunarleague
+          POSTGRES_PASSWORD: changeme
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lunarleague -d lunarleague"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+          cache-dependency-path: apps/api/go.sum
+      - run: go mod download
+      - run: go vet ./...
+      - run: go build ./...
+      - name: Test
+        env:
+          API_SECRET_KEY: ci-secret-key-must-be-32-bytes-or-more
+          DATABASE_URL: postgres://lunarleague:changeme@localhost:5432/lunarleague?sslmode=disable
+          REDIS_URL: redis://localhost:6379/0
+        run: go test ./...
+
+  web:
+    name: Web (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm lint
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_WS_URL: ws://localhost:8000

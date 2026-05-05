@@ -1,0 +1,28 @@
+# Env / secrets
+.env
+.env.local
+deploy/.env
+*.pem
+*.key
+
+# Build outputs
+apps/api/bin/
+apps/api/tmp/
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+*.out

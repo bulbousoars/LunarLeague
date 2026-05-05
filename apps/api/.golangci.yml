@@ -1,0 +1,27 @@
+run:
+  timeout: 3m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - gofmt
+
+linters-settings:
+  revive:
+    severity: warning
+    rules:
+      - name: var-naming
+      - name: package-comments
+      - name: exported
+
+issues:
+  exclude-dirs:
+    - tmp
+    - bin

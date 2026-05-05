@@ -1,0 +1,64 @@
+name: lunarleague
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      - postgres
+
+  api:
+    environment:
+      API_ENV: dev
+      API_LOG_LEVEL: debug
+    volumes:
+      - ../apps/api:/src
+    working_dir: /src
+    command: ["air", "-c", ".air.toml"]
+    build:
+      context: ../apps/api
+      target: dev
+
+  worker:
+    environment:
+      API_ENV: dev
+      API_LOG_LEVEL: debug
+    volumes:
+      - ../apps/api:/src
+    working_dir: /src
+    command: ["air", "-c", ".air.worker.toml"]
+    build:
+      context: ../apps/api
+      target: dev
+
+  web:
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ../apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    command: ["pnpm", "dev"]
+    build:
+      context: ../apps/web
+      target: dev

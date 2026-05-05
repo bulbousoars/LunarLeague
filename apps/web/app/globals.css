@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 11 16 26;
+  --fg: 244 244 248;
+  --muted: 148 163 184;
+  --accent: 56 189 248;
+  --border: 30 41 59;
+  --card: 17 24 39;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-family: var(--font-sans);
+}
+
+a {
+  color: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium
+           transition-colors focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg
+           disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-bg hover:bg-accent/90;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent hover:bg-card;
+  }
+  .btn-outline {
+    @apply btn border border-border bg-transparent hover:bg-card;
+  }
+  .input {
+    @apply w-full rounded-md border border-border bg-card px-3 py-2 text-sm
+           placeholder:text-muted focus:border-accent focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
+  .card {
+    @apply rounded-lg border border-border bg-card p-4;
+  }
+  .card-hover {
+    @apply card hover:border-accent/50 hover:bg-card/80 transition;
+  }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    rgb(var(--card)) 25%,
+    rgb(var(--border)) 50%,
+    rgb(var(--card)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
