@@ -8,6 +8,7 @@ This guide gets you from "fresh Linux box" to "your buddies are signing up" in a
 - Docker 26+ and the Docker Compose v2 plugin
 - A domain pointing at the server (for TLS via Caddy)
 - An outbound SMTP relay you can authenticate to (Postmark, Resend, SendGrid, your provider). Magic-link emails will not deliver reliably from a self-hosted IP without a relay.
+- Production `.env` must use your relay hostname (**do not** use `SMTP_HOST=mailhog` unless Mailhog runs on that compose stack — it exists only in the dev overlay). Port **587** uses STARTTLS automatically; **465** uses implicit TLS. Only use **`SMTP_ALLOW_PLAINTEXT=true`** for legacy internal relays (not on the public Internet).
 
 ## Quick start (production)
 

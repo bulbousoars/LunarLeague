@@ -35,7 +35,8 @@ type SMTP struct {
 	Username string
 	Password string
 	From     string
-	TLS      bool
+	// AllowPlaintext disables TLS/STARTTLS (legacy internal relays only). Mailhog and port 1025 are always plaintext.
+	AllowPlaintext bool
 }
 
 func Load() (*Config, error) {
@@ -52,12 +53,12 @@ func Load() (*Config, error) {
 		PublicWebURL:       getenv("PUBLIC_WEB_URL", "http://localhost:3000"),
 		PublicAPIURL:       getenv("PUBLIC_API_URL", "http://localhost:8000"),
 		SMTP: SMTP{
-			Host:     getenv("SMTP_HOST", "mailhog"),
-			Port:     getenvInt("SMTP_PORT", 1025),
-			Username: os.Getenv("SMTP_USERNAME"),
-			Password: os.Getenv("SMTP_PASSWORD"),
-			From:     getenv("SMTP_FROM", "Lunar League <no-reply@lunarleague.local>"),
-			TLS:      getenvBool("SMTP_TLS", false),
+			Host:           getenv("SMTP_HOST", "mailhog"),
+			Port:           getenvInt("SMTP_PORT", 1025),
+			Username:       os.Getenv("SMTP_USERNAME"),
+			Password:       os.Getenv("SMTP_PASSWORD"),
+			From:           getenv("SMTP_FROM", "Lunar League <no-reply@lunarleague.local>"),
+			AllowPlaintext: getenvBool("SMTP_ALLOW_PLAINTEXT", false),
 		},
 	}
 

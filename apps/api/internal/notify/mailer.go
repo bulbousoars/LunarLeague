@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"log/slog"
 	"strings"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/config"
@@ -28,12 +29,61 @@ func NewSMTPMailer(cfg config.SMTP) Mailer {
 	return &smtpMailer{cfg: cfg}
 }
 
+// LogSMTPStartup logs how outbound SMTP will behave (no credentials).
+func LogSMTPStartup(cfg config.SMTP) {
+	host := strings.TrimSpace(cfg.Host)
+	if host == "" {
+		slog.Warn("smtp: SMTP_HOST is empty; email sending will fail until SMTP_HOST is set")
+		return
+	}
+	slog.Info("smtp: outbound mail", "host", host, "port", cfg.Port, "mode", describeSMTPMode(cfg))
+}
+
+func describeSMTPMode(cfg config.SMTP) string {
+	host := strings.ToLower(strings.TrimSpace(cfg.Host))
+	if host == "mailhog" || cfg.Port == 1025 {
+		return "plaintext (capture/dev)"
+	}
+	if cfg.AllowPlaintext {
+		return "plaintext (SMTP_ALLOW_PLAINTEXT=true)"
+	}
+	if cfg.Port == 465 {
+		return "implicit-tls"
+	}
+	return "starttls"
+}
+
+func smtpDialOptions(cfg config.SMTP) []mail.Option {
+	opts := []mail.Option{mail.WithPort(cfg.Port)}
+	if cfg.Username != "" {
+		opts = append(opts,
+			mail.WithUsername(cfg.Username),
+			mail.WithPassword(cfg.Password),
+			mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		)
+	}
+
+	host := strings.ToLower(strings.TrimSpace(cfg.Host))
+	devCapture := host == "mailhog" || cfg.Port == 1025
+
+	switch {
+	case devCapture || cfg.AllowPlaintext:
+		opts = append(opts, mail.WithTLSPolicy(mail.NoTLS))
+	case cfg.Port == 465:
+		opts = append(opts, mail.WithSSL())
+		opts = append(opts, mail.WithTLSPolicy(mail.TLSMandatory))
+	default:
+		opts = append(opts, mail.WithTLSPolicy(mail.TLSMandatory))
+	}
+	return opts
+}
+
 func (m *smtpMailer) SendMagicLink(ctx context.Context, to, link string) error {
 	subject := "Your Lunar League sign-in link"
 	text := fmt.Sprintf(
 		"Click to sign in to Lunar League:\n\n%s\n\nThe link expires in 15 minutes. If you didn't request this, ignore it.\n",
 		link)
-	html := fmt.Sprintf(`
+	h := fmt.Sprintf(`
 <!doctype html>
 <html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:24px auto;color:#1f2937">
   <h2 style="margin:0 0 12px 0">Sign in to Lunar League</h2>
@@ -41,11 +91,11 @@ func (m *smtpMailer) SendMagicLink(ctx context.Context, to, link string) error {
   <p><a href="%s" style="display:inline-block;padding:10px 16px;background:#111827;color:white;text-decoration:none;border-radius:6px">Sign in</a></p>
   <p style="font-size:12px;color:#6b7280">If you didn't request this, ignore this email.</p>
 </body></html>`, link)
-	return m.send(ctx, to, subject, text, html)
+	return m.send(ctx, to, subject, text, h)
 }
 
-func (m *smtpMailer) SendDigest(ctx context.Context, to, subject, html, text string) error {
-	return m.send(ctx, to, subject, text, html)
+func (m *smtpMailer) SendDigest(ctx context.Context, to, subject, htmlBody, text string) error {
+	return m.send(ctx, to, subject, text, htmlBody)
 }
 
 func (m *smtpMailer) SendLeagueCreated(ctx context.Context, to, leagueName, setupURL, inviteShareURL string) error {
@@ -70,7 +120,11 @@ func (m *smtpMailer) SendLeagueCreated(ctx context.Context, to, leagueName, setu
 	return m.send(ctx, to, subject, text, htmlBody)
 }
 
-func (m *smtpMailer) send(ctx context.Context, to, subject, text, html string) error {
+func (m *smtpMailer) send(ctx context.Context, to, subject, text, htmlBody string) error {
+	if strings.TrimSpace(m.cfg.Host) == "" {
+		return fmt.Errorf("smtp host not configured (SMTP_HOST is empty)")
+	}
+
 	msg := mail.NewMsg()
 	if err := msg.From(m.cfg.From); err != nil {
 		return fmt.Errorf("from: %w", err)
@@ -80,20 +134,11 @@ func (m *smtpMailer) send(ctx context.Context, to, subject, text, html string) e
 	}
 	msg.Subject(subject)
 	msg.SetBodyString(mail.TypeTextPlain, text)
-	if html != "" {
-		msg.AddAlternativeString(mail.TypeTextHTML, html)
+	if htmlBody != "" {
+		msg.AddAlternativeString(mail.TypeTextHTML, htmlBody)
 	}
 
-	opts := []mail.Option{mail.WithPort(m.cfg.Port)}
-	if m.cfg.Username != "" {
-		opts = append(opts, mail.WithUsername(m.cfg.Username), mail.WithPassword(m.cfg.Password))
-		opts = append(opts, mail.WithSMTPAuth(mail.SMTPAuthPlain))
-	}
-	if m.cfg.TLS {
-		opts = append(opts, mail.WithTLSPolicy(mail.TLSMandatory))
-	} else {
-		opts = append(opts, mail.WithTLSPolicy(mail.NoTLS))
-	}
+	opts := smtpDialOptions(m.cfg)
 	c, err := mail.NewClient(m.cfg.Host, opts...)
 	if err != nil {
 		return fmt.Errorf("smtp client: %w", err)

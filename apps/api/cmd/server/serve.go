@@ -35,6 +35,7 @@ func runServe(ctx context.Context, cfg *config.Config) {
 	defer rdb.Close()
 
 	mailer := notify.NewSMTPMailer(cfg.SMTP)
+	notify.LogSMTPStartup(cfg.SMTP)
 
 	var dp provider.DataProvider
 	switch cfg.DataProvider {
