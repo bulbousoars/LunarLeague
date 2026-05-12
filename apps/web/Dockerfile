@@ -4,7 +4,7 @@
 FROM node:22-alpine AS dev
 RUN apk add --no-cache libc6-compat && corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile=false
 COPY . .
 EXPOSE 3000
@@ -14,7 +14,7 @@ CMD ["pnpm", "dev"]
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat && corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile=false --prod=false
 
 # ---------- build ----------

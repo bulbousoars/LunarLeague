@@ -1,0 +1,7 @@
+# pnpm 10.32+ / 11+: lifecycle scripts for dependencies require explicit approval (CI/Docker).
+# Replaces deprecated package.json "pnpm.onlyBuiltDependencies".
+packages:
+  - "."
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

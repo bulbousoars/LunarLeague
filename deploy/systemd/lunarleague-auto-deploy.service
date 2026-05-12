@@ -1,0 +1,20 @@
+[Unit]
+Description=Lunar League git pull, docker compose rebuild, migrate
+Documentation=https://github.com/bulbousoars/LunarLeague
+
+[Service]
+Type=oneshot
+# Optional: LUNARLEAGUE_DEPLOY_BRANCH, LUNARLEAGUE_COMPOSE_OVERLAY (see auto-deploy.env.example)
+EnvironmentFile=-/etc/lunarleague/auto-deploy.env
+# Path must match your clone; override in a drop-in if needed.
+WorkingDirectory=/mnt/storage/docker/lunarleague/app
+# Homelab tree is often root-owned; unattended git pull needs write on .git.
+User=root
+Group=root
+ExecStart=/mnt/storage/docker/lunarleague/app/deploy/scripts/vm-periodic-deploy.sh
+
+# Hardening: no new privileges (fine for oneshot git+docker)
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

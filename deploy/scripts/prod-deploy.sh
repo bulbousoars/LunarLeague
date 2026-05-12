@@ -19,6 +19,12 @@ else
   echo "Using base stack only (no docker-compose.caddy.yml here)"
 fi
 
+OVERLAY="${LUNARLEAGUE_COMPOSE_OVERLAY:-}"
+if [[ -n "$OVERLAY" && -f "docker-compose.${OVERLAY}.yml" ]]; then
+  COMPOSE+=(-f "docker-compose.${OVERLAY}.yml")
+  echo "Also merging docker-compose.${OVERLAY}.yml"
+fi
+
 BRANCH="${LUNARLEAGUE_DEPLOY_BRANCH:-main}"
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"

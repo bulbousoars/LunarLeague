@@ -1,0 +1,2 @@
+# Scripts run on Linux VMs / containers — always LF
+*.sh text eol=lf
