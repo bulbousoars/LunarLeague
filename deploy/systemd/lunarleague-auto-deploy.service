@@ -11,7 +11,7 @@ WorkingDirectory=/mnt/storage/docker/lunarleague/app
 # Homelab tree is often root-owned; unattended git pull needs write on .git.
 User=root
 Group=root
-ExecStart=/mnt/storage/docker/lunarleague/app/deploy/scripts/vm-periodic-deploy.sh
+ExecStart=/bin/bash /mnt/storage/docker/lunarleague/app/deploy/scripts/vm-periodic-deploy.sh
 
 # Hardening: no new privileges (fine for oneshot git+docker)
 NoNewPrivileges=yes
