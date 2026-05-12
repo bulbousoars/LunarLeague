@@ -11,7 +11,6 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/config"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
-	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/router"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/ws"
 	"github.com/redis/go-redis/v9"
