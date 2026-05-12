@@ -10,10 +10,23 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
 )
+
+func mlbDisplayName(id int, full, fn, ln string) string {
+	s := strings.TrimSpace(full)
+	if s != "" {
+		return s
+	}
+	s = strings.TrimSpace(strings.TrimSpace(fn) + " " + strings.TrimSpace(ln))
+	if s != "" {
+		return s
+	}
+	return strconv.Itoa(id)
+}
 
 const baseURL = "https://statsapi.mlb.com/api/v1"
 
@@ -63,7 +76,7 @@ func (p *Provider) SyncPlayers(ctx context.Context, sport provider.Sport) ([]pro
 		number, _ := strconv.Atoi(pl.PrimaryNumber)
 		out = append(out, provider.Player{
 			ProviderPlayerID:  strconv.Itoa(pl.ID),
-			FullName:          pl.FullName,
+			FullName:          mlbDisplayName(pl.ID, pl.FullName, pl.FirstName, pl.LastName),
 			FirstName:         pl.FirstName,
 			LastName:          pl.LastName,
 			Position:          pl.PrimaryPosition.Abbreviation,

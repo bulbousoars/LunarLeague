@@ -129,7 +129,9 @@ export default function PlayersPage() {
             {players.isSuccess &&
               players.data?.players.map((p) => (
                 <tr key={p.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium">{p.full_name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {p.full_name?.trim() || "—"}
+                  </td>
                   <td className="px-3 py-2 text-muted">{p.position ?? "—"}</td>
                   <td className="px-3 py-2 text-muted">{p.nfl_team ?? "—"}</td>
                   <td className="px-3 py-2 text-muted">

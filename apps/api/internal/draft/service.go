@@ -19,6 +19,7 @@ import (
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/ws"
 	"github.com/go-chi/chi/v5"
 )
@@ -337,11 +338,11 @@ func (s *Service) getQueue(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT q.player_id, q.rank, p.full_name, p.position, p.nfl_team
+	rows, err := s.pool.Query(r.Context(), fmt.Sprintf(`
+		SELECT q.player_id, q.rank, %s, p.position, p.nfl_team
 		FROM draft_queues q JOIN players p ON p.id = q.player_id
 		WHERE q.draft_id = $1 AND q.team_id = $2
-		ORDER BY q.rank`, d.ID, teamID)
+		ORDER BY q.rank`, player.DisplayNameP), d.ID, teamID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -373,10 +374,10 @@ type keeperReq struct {
 
 func (s *Service) listKeepers(w http.ResponseWriter, r *http.Request) {
 	leagueID := chi.URLParam(r, "leagueID")
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT r.id, r.team_id, r.player_id, p.full_name, r.keeper_round_cost
+	rows, err := s.pool.Query(r.Context(), fmt.Sprintf(`
+		SELECT r.id, r.team_id, r.player_id, %s, r.keeper_round_cost
 		FROM rosters r JOIN players p ON p.id = r.player_id
-		WHERE r.league_id = $1 AND r.keeper_round_cost IS NOT NULL`, leagueID)
+		WHERE r.league_id = $1 AND r.keeper_round_cost IS NOT NULL`, player.DisplayNameP), leagueID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -635,7 +636,7 @@ func (s *Service) autopick(ctx context.Context, d Draft, clk *OnClock) {
 			SELECT p.id FROM players p JOIN sports sp ON sp.id = p.sport_id
 			WHERE sp.code = (SELECT code FROM sports WHERE id = (SELECT sport_id FROM leagues WHERE id = $1))
 			  AND NOT EXISTS (SELECT 1 FROM rosters r WHERE r.league_id = $1 AND r.player_id = p.id)
-			ORDER BY p.full_name LIMIT 1`, d.LeagueID).Scan(&playerID)
+			ORDER BY `+player.DisplayNameP+` LIMIT 1`, d.LeagueID).Scan(&playerID)
 	}
 	if playerID == "" {
 		fmt.Println("autopick: no eligible player")

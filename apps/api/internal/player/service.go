@@ -17,6 +17,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// DisplayNameP is SQL for a non-empty label when reading players as alias p.
+// Upstreams sometimes omit full_name while first/last or provider id exist.
+const DisplayNameP = `COALESCE(NULLIF(btrim(p.full_name), ''), NULLIF(btrim(concat_ws(' ', p.first_name, p.last_name)), ''), p.provider_player_id)`
+
+// DisplayNameBare is the same logic without a table alias.
+const DisplayNameBare = `COALESCE(NULLIF(btrim(full_name), ''), NULLIF(btrim(concat_ws(' ', first_name, last_name)), ''), provider_player_id)`
+
 type Service struct {
 	pool *db.DB
 }
@@ -77,19 +84,25 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 	if search != "" {
-		conds = append(conds, fmt.Sprintf("p.full_name ILIKE $%d", idx))
-		args = append(args, "%"+search+"%")
+		pat := "%" + search + "%"
+		conds = append(conds, fmt.Sprintf(`(p.full_name ILIKE $%d OR concat_ws(' ', p.first_name, p.last_name) ILIKE $%d OR p.provider_player_id ILIKE $%d)`, idx, idx, idx))
+		args = append(args, pat)
 		idx++
 	}
 	args = append(args, limit, offset)
 
 	query := fmt.Sprintf(`
-		SELECT p.id, p.full_name, p.position, p.eligible_positions, p.nfl_team,
+		SELECT p.id, %s, p.position, p.eligible_positions, p.nfl_team,
 		       p.status, p.injury_status, p.headshot_url
 		FROM players p JOIN sports sp ON sp.id = p.sport_id
 		WHERE %s
-		ORDER BY p.full_name
-		LIMIT $%d OFFSET $%d`, strings.Join(conds, " AND "), idx, idx+1)
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d`,
+		DisplayNameP,
+		strings.Join(conds, " AND "),
+		DisplayNameP,
+		idx,
+		idx+1)
 
 	rows, err := s.pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -113,9 +126,9 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "playerID")
 	var p player
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT id, full_name, position, eligible_positions, nfl_team, status, injury_status, headshot_url
-		FROM players WHERE id = $1`, id).
+	err := s.pool.QueryRow(r.Context(), fmt.Sprintf(`
+		SELECT id, %s, position, eligible_positions, nfl_team, status, injury_status, headshot_url
+		FROM players WHERE id = $1`, DisplayNameBare), id).
 		Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions, &p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err)
@@ -127,13 +140,13 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 func (s *Service) trending(w http.ResponseWriter, r *http.Request) {
 	// Computed on the fly from a hypothetical trending_players table; for MVP
 	// just surface the top recently-added rosters.
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT p.id, p.full_name, p.position, p.nfl_team
+	rows, err := s.pool.Query(r.Context(), fmt.Sprintf(`
+		SELECT p.id, %s, p.position, p.nfl_team
 		FROM rosters r
 		JOIN players p ON p.id = r.player_id
 		WHERE r.acquired_at > now() - interval '24 hours'
-		GROUP BY p.id, p.full_name, p.position, p.nfl_team
-		ORDER BY count(*) DESC LIMIT 25`)
+		GROUP BY p.id, p.full_name, p.first_name, p.last_name, p.provider_player_id, p.position, p.nfl_team
+		ORDER BY count(*) DESC LIMIT 25`, DisplayNameP))
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return

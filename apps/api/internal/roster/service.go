@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -41,11 +43,11 @@ type rosterEntry struct {
 
 func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT r.id, r.player_id, p.full_name, p.position, p.nfl_team, r.slot, r.acquired_via, r.acquired_at, r.keeper_round_cost
+	rows, err := s.pool.Query(r.Context(), fmt.Sprintf(`
+		SELECT r.id, r.player_id, %s, p.position, p.nfl_team, r.slot, r.acquired_via, r.acquired_at, r.keeper_round_cost
 		FROM rosters r JOIN players p ON p.id = r.player_id
 		WHERE r.team_id = $1
-		ORDER BY p.position NULLS LAST, p.full_name`, teamID)
+		ORDER BY p.position NULLS LAST, %s`, player.DisplayNameP, player.DisplayNameP), teamID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return

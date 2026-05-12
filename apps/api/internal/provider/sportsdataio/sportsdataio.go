@@ -128,6 +128,9 @@ func (p *Provider) SyncPlayers(ctx context.Context, sport provider.Sport) ([]pro
 		if pos != "" {
 			elig = append(elig, pos)
 		}
+		if full == "" {
+			full = strconv.Itoa(r.PlayerID)
+		}
 		out = append(out, provider.Player{
 			ProviderPlayerID:  strconv.Itoa(r.PlayerID),
 			FullName:          full,

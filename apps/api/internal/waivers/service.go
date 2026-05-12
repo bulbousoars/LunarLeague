@@ -11,6 +11,7 @@ import (
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/roster"
 	"github.com/go-chi/chi/v5"
 )
@@ -119,14 +120,14 @@ func (s *Service) cancel(w http.ResponseWriter, r *http.Request) {
 // freeAgents lists undrafted/un-rostered players in the league's sport.
 func (s *Service) freeAgents(w http.ResponseWriter, r *http.Request) {
 	leagueID := chi.URLParam(r, "leagueID")
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT p.id, p.full_name, p.position, p.nfl_team, p.injury_status, p.headshot_url
+	rows, err := s.pool.Query(r.Context(), fmt.Sprintf(`
+		SELECT p.id, %s, p.position, p.nfl_team, p.injury_status, p.headshot_url
 		FROM players p
 		JOIN leagues l ON l.id = $1
 		WHERE p.sport_id = l.sport_id
 		  AND NOT EXISTS (SELECT 1 FROM rosters r WHERE r.league_id = $1 AND r.player_id = p.id)
-		ORDER BY p.full_name
-		LIMIT 200`, leagueID)
+		ORDER BY %s
+		LIMIT 200`, player.DisplayNameP, player.DisplayNameP), leagueID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return

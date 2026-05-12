@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
@@ -83,12 +84,25 @@ func nonNilStrSlice(s []string) []string {
 	return s
 }
 
+func sleeperDisplayName(id string, r rawPlayer) string {
+	full := strings.TrimSpace(r.FullName)
+	if full != "" {
+		return full
+	}
+	fn := strings.TrimSpace(r.FirstName)
+	ln := strings.TrimSpace(r.LastName)
+	if s := strings.TrimSpace(fn + " " + ln); s != "" {
+		return s
+	}
+	return id
+}
+
 func (r rawPlayer) toPlayer(id, sportCode string) provider.Player {
 	heightIn := parseHeight(r.Height)
 	weightLb := parseInt(r.Weight)
 	return provider.Player{
 		ProviderPlayerID:  id,
-		FullName:          r.FullName,
+		FullName:          sleeperDisplayName(id, r),
 		FirstName:         r.FirstName,
 		LastName:          r.LastName,
 		Position:          r.Position,
