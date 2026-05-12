@@ -2,11 +2,11 @@
 Description=Timer periodic Lunar League deploy from git
 
 [Timer]
-# Every 6 hours (UTC). Change OnCalendar to taste, e.g. daily 04:15:
-#   OnCalendar=*-*-* 04:15:00
-OnCalendar=*-*-* 00,06,12,18:00
-Persistent=true
-RandomizedDelaySec=300
+# Every 2 minutes (homelab / fast iteration). For production, prefer something
+# like OnCalendar=*-*-* 00,06,12,18:00 with RandomizedDelaySec=300.
+OnCalendar=*-*-* *:0/2:00
+Persistent=false
+RandomizedDelaySec=0
 
 [Install]
 WantedBy=timers.target

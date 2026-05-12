@@ -48,7 +48,7 @@ Use this when **lunarleague.dugganco.com** (or any host) should **pull the publi
    sudo systemctl list-timers | grep lunarleague
    ```
 
-   The default timer runs **every 6 hours** with a **5-minute** random delay. Adjust `OnCalendar` in the timer file.
+   The shipped timer defaults to **every 2 minutes** (homelab). For production, edit `OnCalendar` in the timer file (e.g. four times daily) and consider `RandomizedDelaySec=300`.
 
    Use **`ExecStart=/bin/bash …/vm-periodic-deploy.sh`** (as in the repo unit): the deploy scripts are **not** marked executable in Git (`100644`), so a bare path fails with `status=203/EXEC` after `git reset --hard`.
 
