@@ -47,6 +47,12 @@ if [[ ! -f "$REPO_ROOT/deploy/.env" ]]; then
   exit 1
 fi
 
+# Refresh repo (including this script) before prod-deploy. Avoids a chicken-and-egg where an old
+# vm-periodic-deploy.sh cannot reach prod-deploy.sh fixes until someone manually git pull's on the VM.
+git -C "$REPO_ROOT" fetch origin "$LUNARLEAGUE_DEPLOY_BRANCH"
+git -C "$REPO_ROOT" checkout "$LUNARLEAGUE_DEPLOY_BRANCH"
+git -C "$REPO_ROOT" reset --hard "origin/$LUNARLEAGUE_DEPLOY_BRANCH"
+
 # prod-deploy.sh is tracked as non-executable (100644); invoke with bash so git pull does not break the timer.
 bash "$SCRIPT_DIR/prod-deploy.sh"
 
