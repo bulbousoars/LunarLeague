@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { api, ApiError, wsURL } from "@/lib/api";
-import type { Draft, DraftPick, OnTheClock, Player, Team } from "@/lib/types";
+import type { Draft, DraftPick, League, OnTheClock, Player, Team } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
 
 export default function DraftRoomPage() {
@@ -23,9 +23,21 @@ export default function DraftRoomPage() {
     queryFn: () => api<{ teams: Team[] }>(`/v1/leagues/${leagueId}/teams`),
   });
 
+  const league = useQuery({
+    queryKey: ["league", leagueId],
+    queryFn: () => api<League>(`/v1/leagues/${leagueId}`),
+  });
+
+  const sport = (league.data?.sport_code ?? "nfl").toLowerCase();
+
   const players = useQuery({
-    queryKey: ["players", "nfl"],
-    queryFn: () => api<{ players: Player[] }>(`/v1/players?sport=nfl&limit=200`),
+    queryKey: ["players", "browse", sport, leagueId],
+    queryFn: () =>
+      api<{ players: Player[] }>(
+        `/v1/players?sport=${encodeURIComponent(sport)}&limit=200`,
+      ),
+    enabled: league.isSuccess,
+    retry: 2,
   });
 
   // Subscribe to draft events
@@ -174,6 +186,41 @@ export default function DraftRoomPage() {
                 </tr>
               </thead>
               <tbody>
+                {players.isLoading && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-3 py-6 text-center text-muted"
+                    >
+                      Loading player list…
+                    </td>
+                  </tr>
+                )}
+                {players.isError && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-3 py-6 text-center text-red-300"
+                    >
+                      {players.error instanceof ApiError
+                        ? `Could not load players (${players.error.status}).`
+                        : "Could not load players."}
+                    </td>
+                  </tr>
+                )}
+                {players.isSuccess &&
+                  available.length === 0 &&
+                  !players.isLoading && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-3 py-6 text-center text-muted"
+                      >
+                        No players available for {sport}. Sync the player
+                        universe (worker / seed) or check API logs.
+                      </td>
+                    </tr>
+                  )}
                 {available.slice(0, 100).map((p) => (
                   <tr key={p.id} className="border-t border-border">
                     <td className="px-3 py-2">{p.full_name}</td>

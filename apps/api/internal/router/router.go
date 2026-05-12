@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -66,6 +67,16 @@ func New(d *Deps) http.Handler {
 	notifySvc := notify.NewService(d.DB, d.Mailer)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := d.DB.Ping(ctx); err != nil {
+			httpx.WriteError(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if err := d.Redis.Ping(ctx).Err(); err != nil {
+			httpx.WriteError(w, http.StatusServiceUnavailable, err)
+			return
+		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
 

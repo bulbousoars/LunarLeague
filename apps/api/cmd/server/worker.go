@@ -9,18 +9,18 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
-	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
-	"github.com/bulbousoars/lunarleague/apps/api/internal/provider/sleeper"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/schedule"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/waivers"
 )
 
 // runWorker runs scheduled background jobs:
-//   - Player universe sync (weekly)
+//   - Player universe sync (daily)
 //   - Injury / news sync (hourly)
-//   - Live stat poll (30s during NFL game windows)
+//   - Schedule refresh (6h) for live stat polling
+//   - Live stat poll (30s when games are in flight)
 //   - Waiver processing (default Wed 03:00 ET)
-//   - Email digests (Tuesday morning)
+//   - Email digests (hourly tick)
 //
 // Implementation note: this uses a simple in-process ticker scheduler. River is
 // declared in go.mod for future migration once we need durable cross-replica jobs.
@@ -40,12 +40,9 @@ func runWorker(ctx context.Context, cfg *config.Config) {
 		notify.LogSMTPReachability(pctx, cfg.SMTP)
 	}()
 
-	var dp provider.DataProvider
-	switch cfg.DataProvider {
-	case "sleeper":
-		dp = sleeper.New()
-	default:
-		slog.Error("data provider not yet implemented", "provider", cfg.DataProvider)
+	dp, err := newDataProvider(cfg)
+	if err != nil {
+		slog.Error("data provider", "err", err)
 		return
 	}
 
@@ -60,10 +57,10 @@ func runWorker(ctx context.Context, cfg *config.Config) {
 		{name: "injury-sync", every: 1 * time.Hour, fn: func(ctx context.Context) error {
 			return playerSvc.SyncInjuriesFromProvider(ctx, dp)
 		}},
+		{name: "schedule-sync", every: 6 * time.Hour, fn: func(ctx context.Context) error {
+			return schedule.SyncFromProviders(ctx, pool, dp)
+		}},
 		{name: "live-stats", every: 30 * time.Second, fn: func(ctx context.Context) error {
-			if !inGameWindow(time.Now()) {
-				return nil
-			}
 			return scoringSvc.PollLiveStats(ctx, dp)
 		}},
 		{name: "waiver-processor", every: 5 * time.Minute, fn: func(ctx context.Context) error {
@@ -117,22 +114,4 @@ func tick(ctx context.Context, j job) {
 		return
 	}
 	slog.Debug("job ok", "name", j.name, "dur", time.Since(start))
-}
-
-// inGameWindow returns true during NFL game windows in US/Eastern.
-// (Approximate: Sun 12:00–24:00, Mon 19:00–24:00, Thu 19:00–24:00.)
-func inGameWindow(now time.Time) bool {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		loc = time.UTC
-	}
-	t := now.In(loc)
-	switch t.Weekday() {
-	case time.Sunday:
-		return t.Hour() >= 12
-	case time.Monday, time.Thursday:
-		return t.Hour() >= 19
-	default:
-		return false
-	}
 }

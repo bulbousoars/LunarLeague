@@ -10,7 +10,7 @@ Yahoo and ESPN are free, but they own your league, your data, and your attention
 
 ## Status
 
-Early development. See [the plan](.cursor/plans) for the roadmap.
+Early development. See [docs/ROADMAP.md](docs/ROADMAP.md) for the roadmap.
 
 | Phase | Status |
 | --- | --- |
@@ -53,7 +53,7 @@ This brings up:
 - API at <http://localhost:8000>
 - Web at <http://localhost:3000>
 
-For production deployment behind Caddy with TLS see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md): copy `deploy/.env.production.example` to `deploy/.env`, fill secrets + SMTP, then from repo root run **`make prod-up`** (or use `deploy/scripts/prod-deploy.sh` on the server). Optional: GitHub Actions **Deploy production** (`.github/workflows/deploy.yml`) — run it manually under **Actions** after configuring `LUNARLEAGUE_*` secrets; add a `push` trigger there if you want deploy-on-push.
+For production deployment behind Caddy with TLS see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md): copy `deploy/.env.production.example` to `deploy/.env`, fill secrets + SMTP, then from repo root run **`make prod-up`** (or use `deploy/scripts/prod-deploy.sh` on the server). **Homelab auto-update:** periodic pull + rebuild on the VM — [docs/DEPLOY_VM_PERIODIC.md](docs/DEPLOY_VM_PERIODIC.md) (no secrets in GitHub). **Optional CI/CD:** GitHub Actions **Deploy production** (`.github/workflows/deploy.yml`) on push to **`main`** or manual; see [docs/DEPLOY_GITHUB_DUGGANCO.md](docs/DEPLOY_GITHUB_DUGGANCO.md) if you use cloud runners + SSH.
 
 Maintainers using **OpenBao SSH CA + wrapped broker** from Windows to reach the homelab: [docs/AGENT_HOMELAB_SSH.md](docs/AGENT_HOMELAB_SSH.md).
 
@@ -63,7 +63,7 @@ Maintainers using **OpenBao SSH CA + wrapped broker** from Windows to reach the 
 - **Frontend**: Next.js 15 (App Router), Tailwind v4, shadcn/ui, TanStack Query
 - **Storage**: Postgres 16, Redis 7
 - **Realtime**: WebSockets fanned out via Redis pub/sub
-- **Auth**: Magic link email by default; OIDC for Authentik / Keycloak users
+- **Auth**: Magic link email today; OIDC for Authentik / Keycloak is [planned Phase 4](docs/ROADMAP.md) (not in the codebase yet)
 
 ## Repository layout
 

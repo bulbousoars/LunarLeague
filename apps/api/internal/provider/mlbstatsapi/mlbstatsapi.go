@@ -1,10 +1,5 @@
 // Package mlbstatsapi is a DataProvider implementation backed by the official
 // MLB Stats API at https://statsapi.mlb.com/api/v1/.
-//
-// Status: scaffolded. SyncPlayers and SyncSchedule are wired up; stats and
-// injuries are stubs that return empty so leagues can be created and the
-// player universe will populate, but live scoring is intentionally noop until
-// we settle on a category schema for fantasy baseball (categories vs. points).
 package mlbstatsapi
 
 import (
@@ -27,29 +22,28 @@ type Provider struct {
 }
 
 func New() *Provider {
-	return &Provider{client: &http.Client{Timeout: 30 * time.Second}}
+	return &Provider{client: &http.Client{Timeout: 45 * time.Second}}
 }
 
 func (p *Provider) Name() string { return "mlbstatsapi" }
 
-// SyncPlayers calls /sports/1/players (sport_id=1 is MLB) and returns the
-// active player roster.
 func (p *Provider) SyncPlayers(ctx context.Context, sport provider.Sport) ([]provider.Player, error) {
 	if sport.Code != "mlb" {
 		return nil, errors.New("mlbstatsapi only supports MLB")
 	}
-	url := fmt.Sprintf("%s/sports/1/players?season=%d", baseURL, time.Now().Year())
+	yr := time.Now().Year()
+	url := fmt.Sprintf("%s/sports/1/players?season=%d", baseURL, yr)
 	body, err := p.get(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 	var raw struct {
 		People []struct {
-			ID                int    `json:"id"`
-			FullName          string `json:"fullName"`
-			FirstName         string `json:"firstName"`
-			LastName          string `json:"lastName"`
-			PrimaryPosition   struct {
+			ID              int    `json:"id"`
+			FullName        string `json:"fullName"`
+			FirstName       string `json:"firstName"`
+			LastName        string `json:"lastName"`
+			PrimaryPosition struct {
 				Abbreviation string `json:"abbreviation"`
 			} `json:"primaryPosition"`
 			CurrentTeam struct {
@@ -65,27 +59,30 @@ func (p *Provider) SyncPlayers(ctx context.Context, sport provider.Sport) ([]pro
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	out := make([]provider.Player, 0, len(raw.People))
-	for _, p := range raw.People {
-		number, _ := strconv.Atoi(p.PrimaryNumber)
+	for _, pl := range raw.People {
+		number, _ := strconv.Atoi(pl.PrimaryNumber)
 		out = append(out, provider.Player{
-			ProviderPlayerID:  strconv.Itoa(p.ID),
-			FullName:          p.FullName,
-			FirstName:         p.FirstName,
-			LastName:          p.LastName,
-			Position:          p.PrimaryPosition.Abbreviation,
-			EligiblePositions: []string{p.PrimaryPosition.Abbreviation},
-			NFLTeam:           p.CurrentTeam.Abbreviation,
+			ProviderPlayerID:  strconv.Itoa(pl.ID),
+			FullName:          pl.FullName,
+			FirstName:         pl.FirstName,
+			LastName:          pl.LastName,
+			Position:          pl.PrimaryPosition.Abbreviation,
+			EligiblePositions: []string{pl.PrimaryPosition.Abbreviation},
+			NFLTeam:           pl.CurrentTeam.Abbreviation,
 			JerseyNumber:      &number,
-			Status:            ifThen(p.Active, "Active", "Inactive"),
-			WeightLbs:         &p.Weight,
+			Status:            ifThen(pl.Active, "Active", "Inactive"),
+			WeightLbs:         &pl.Weight,
 		})
 	}
 	return out, nil
 }
 
 // SyncSchedule pulls the season schedule, returning all regular-season games
-// flattened into provider.Game.
+// flattened into provider.Game. Week is a YYYYMMDD slate key for daily sports.
 func (p *Provider) SyncSchedule(ctx context.Context, sport provider.Sport, season int) ([]provider.Game, error) {
+	if sport.Code != "mlb" {
+		return nil, errors.New("mlbstatsapi only supports MLB")
+	}
 	url := fmt.Sprintf("%s/schedule?sportId=1&season=%d&gameType=R", baseURL, season)
 	body, err := p.get(ctx, url)
 	if err != nil {
@@ -94,19 +91,21 @@ func (p *Provider) SyncSchedule(ctx context.Context, sport provider.Sport, seaso
 	var raw struct {
 		Dates []struct {
 			Games []struct {
-				GamePk     int    `json:"gamePk"`
-				GameDate   string `json:"gameDate"`
-				DetailedState string `json:"status.detailedState"`
-				Teams      struct {
+				GamePk   int    `json:"gamePk"`
+				GameDate string `json:"gameDate"`
+				Status   struct {
+					DetailedState string `json:"detailedState"`
+				} `json:"status"`
+				Teams struct {
 					Home struct {
 						Team struct {
-							Abbr string `json:"abbreviation"`
+							Abbreviation string `json:"abbreviation"`
 						} `json:"team"`
 						Score *int `json:"score"`
 					} `json:"home"`
 					Away struct {
 						Team struct {
-							Abbr string `json:"abbreviation"`
+							Abbreviation string `json:"abbreviation"`
 						} `json:"team"`
 						Score *int `json:"score"`
 					} `json:"away"`
@@ -120,13 +119,20 @@ func (p *Provider) SyncSchedule(ctx context.Context, sport provider.Sport, seaso
 	out := []provider.Game{}
 	for _, d := range raw.Dates {
 		for _, g := range d.Games {
+			t, err := time.Parse(time.RFC3339, g.GameDate)
+			if err != nil {
+				continue
+			}
+			utc := t.UTC()
+			weekKey := utc.Year()*10000 + int(utc.Month())*100 + utc.Day()
 			out = append(out, provider.Game{
 				ProviderGameID: strconv.Itoa(g.GamePk),
 				Season:         season,
-				HomeTeam:       g.Teams.Home.Team.Abbr,
-				AwayTeam:       g.Teams.Away.Team.Abbr,
+				Week:           weekKey,
+				HomeTeam:       g.Teams.Home.Team.Abbreviation,
+				AwayTeam:       g.Teams.Away.Team.Abbreviation,
 				KickoffISO:     g.GameDate,
-				Status:         g.DetailedState,
+				Status:         g.Status.DetailedState,
 				HomeScore:      g.Teams.Home.Score,
 				AwayScore:      g.Teams.Away.Score,
 			})
@@ -135,16 +141,26 @@ func (p *Provider) SyncSchedule(ctx context.Context, sport provider.Sport, seaso
 	return out, nil
 }
 
-// SyncWeekStats / SyncInjuries / SyncTrending: not yet implemented.
-func (p *Provider) SyncWeekStats(_ context.Context, _ provider.Sport, _, _ int) ([]provider.StatLine, error) {
+func (p *Provider) SyncWeekStats(ctx context.Context, sport provider.Sport, season, week int) ([]provider.StatLine, error) {
+	if sport.Code != "mlb" {
+		return nil, nil
+	}
+	if week < 20000000 {
+		return nil, nil
+	}
+	y := week / 10000
+	md := week % 10000
+	mo := md / 100
+	da := md % 100
+	date := fmt.Sprintf("%04d-%02d-%02d", y, mo, da)
+	return p.statsForDate(ctx, date)
+}
+
+func (p *Provider) SyncInjuries(context.Context, provider.Sport) ([]provider.InjuryUpdate, error) {
 	return nil, nil
 }
 
-func (p *Provider) SyncInjuries(_ context.Context, _ provider.Sport) ([]provider.InjuryUpdate, error) {
-	return nil, nil
-}
-
-func (p *Provider) SyncTrending(_ context.Context, _ provider.Sport) ([]provider.TrendingPlayer, error) {
+func (p *Provider) SyncTrending(context.Context, provider.Sport) ([]provider.TrendingPlayer, error) {
 	return nil, nil
 }
 

@@ -72,7 +72,7 @@ func Load() (*Config, error) {
 		return nil, errors.New("DATABASE_URL is required")
 	}
 	switch c.DataProvider {
-	case "sleeper":
+	case "sleeper", "mlbstatsapi":
 	case "sportsdataio":
 		if c.SportsDataIOAPIKey == "" {
 			return nil, errors.New("SPORTSDATAIO_API_KEY is required when DATA_PROVIDER=sportsdataio")

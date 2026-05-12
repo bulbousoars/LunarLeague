@@ -68,27 +68,38 @@ The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `
 
 ### Automated deploy from GitHub Actions
 
-If this repo is on GitHub, workflow **Deploy production** (`.github/workflows/deploy.yml`) SSHes into your VPS when you run it from **Actions → Deploy production → Run workflow**. Add repository secrets `LUNARLEAGUE_SSH_HOST`, `LUNARLEAGUE_SSH_USER`, `LUNARLEAGUE_SSH_KEY`, and `LUNARLEAGUE_DEPLOY_DIR` (absolute path on the server to **`LunarLeague/deploy`** — the folder that contains `docker-compose.yml`, optional `docker-compose.caddy.yml`, and `.env`). The workflow merges `docker-compose.caddy.yml` automatically when that file exists. To deploy on every push to `main`, add a `push` trigger back to that workflow after secrets are configured.
+Workflow **Deploy production** (`.github/workflows/deploy.yml`) keeps production in sync with **`main`**:
 
-Point **`PUBLIC_WEB_URL`** and **`PUBLIC_API_URL`** in `.env` at your real HTTPS domain (e.g. `https://fantasy.yourdomain.com`) so magic-link and league emails link correctly.
+- **On push** to `main` when `apps/`, `deploy/`, or the workflow file changes.
+- **Manual:** Actions → **Deploy production** → **Run workflow**.
+
+It SSHs to your host, **git fast-forwards** the repo root (parent of `deploy/`), runs **docker compose up --build**, **`api migrate up`**, then curls **`/healthz`** on the API port from `deploy/.env` (`API_PORT`, default `8000`).
+
+**Setup:** see **[docs/DEPLOY_GITHUB_DUGGANCO.md](DEPLOY_GITHUB_DUGGANCO.md)** for secrets, optional variable **`LUNARLEAGUE_COMPOSE_OVERLAY`**, and the important note that **GitHub’s cloud runners cannot SSH to a private `192.168.x.x` host** unless you use a self-hosted runner, VPN, or similar.
+
+**VM-only automation** (periodic `git pull` + Docker on the host, no GitHub credentials in the repo): **[docs/DEPLOY_VM_PERIODIC.md](DEPLOY_VM_PERIODIC.md)**.
+
+Point **`PUBLIC_WEB_URL`** and **`PUBLIC_API_URL`** in `.env` at your real HTTPS domain (e.g. `https://lunarleague.dugganco.com`) so magic-link and league emails link correctly.
 
 ## Premium data provider (SportsData.io)
 
-The free Sleeper provider gives weekly stats post-game. If you want sub-minute live scoring during NFL game windows, switch to SportsData.io:
+The free Sleeper provider covers **NFL and NBA**. **MLB** uses the official MLB Stats API automatically when `DATA_PROVIDER=sleeper` (no extra key). For all three sports on one commercial feed, use SportsData.io:
 
 ```bash
 DATA_PROVIDER=sportsdataio
 SPORTSDATAIO_API_KEY=your-key-here
 ```
 
-SportsData.io's Fantasy Sports tier is ~$19/mo as of 2026. The provider abstraction in `apps/api/internal/provider/` makes the switch a one-env-var change.
+SportsData.io subscriptions are per product; ensure your key includes the NFL, NBA, and/or MLB endpoints you need. The provider abstraction in `apps/api/internal/provider/` maps env → implementation.
+
+**MLB-only** installs can set `DATA_PROVIDER=mlbstatsapi` (no Sleeper NFL/NBA universe).
 
 ## Hosting recommendations
 
 - **Backups**: enable automated postgres dumps. The `LunarLeague/api` image has `pg_dump` as a stretch goal but for now use a host cron.
-- **Monitoring**: hit `/healthz` with your monitoring tool. The endpoint returns 200 only when the API can talk to Postgres + Redis.
+- **Monitoring**: hit `/healthz` with your monitoring tool. The handler checks Postgres (`Ping`) and Redis (`PING`) before returning 200.
 - **Scaling**: a single 1 vCPU / 1 GB box handles a 12-team league with a live draft easily. Scale by adding API replicas behind Caddy; the WebSocket hub will fan out via Redis pub/sub. Worker should remain single-replica until river is wired in.
 
 ## Authentik / OIDC
 
-If you already run Authentik (or any OIDC IdP), Lunar League will plug in via OIDC in Phase 3 polish work. Until then, magic-link email is the supported flow.
+OIDC (Authentik, Keycloak, etc.) is **planned Phase 4** work; see [docs/ROADMAP.md](ROADMAP.md). Magic-link email is the only supported login flow today.

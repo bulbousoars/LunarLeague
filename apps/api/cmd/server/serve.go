@@ -12,7 +12,6 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
-	"github.com/bulbousoars/lunarleague/apps/api/internal/provider/sleeper"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/router"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/ws"
 	"github.com/redis/go-redis/v9"
@@ -42,12 +41,9 @@ func runServe(ctx context.Context, cfg *config.Config) {
 		notify.LogSMTPReachability(pctx, cfg.SMTP)
 	}()
 
-	var dp provider.DataProvider
-	switch cfg.DataProvider {
-	case "sleeper":
-		dp = sleeper.New()
-	default:
-		slog.Error("data provider not yet implemented", "provider", cfg.DataProvider)
+	dp, err := newDataProvider(cfg)
+	if err != nil {
+		slog.Error("data provider", "err", err)
 		return
 	}
 

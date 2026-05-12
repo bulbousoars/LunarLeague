@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bulbousoars/lunarleague/apps/api/internal/dataprovider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
@@ -159,13 +160,17 @@ func (s *Service) SyncFromProvider(ctx context.Context, dp provider.DataProvider
 	if dp == nil {
 		return errors.New("no provider")
 	}
-	for _, code := range []string{"nfl"} { // NBA can be added later
+	for _, code := range []string{"nfl", "nba", "mlb"} {
 		var sportID int
 		err := s.pool.QueryRow(ctx, `SELECT id FROM sports WHERE code = $1`, code).Scan(&sportID)
 		if err != nil {
 			continue
 		}
-		players, err := dp.SyncPlayers(ctx, provider.Sport{ID: sportID, Code: code})
+		eff := dataprovider.ForSport(dp, code)
+		if eff == nil {
+			continue
+		}
+		players, err := eff.SyncPlayers(ctx, provider.Sport{ID: sportID, Code: code})
 		if err != nil {
 			return fmt.Errorf("%s players: %w", code, err)
 		}
@@ -178,7 +183,7 @@ func (s *Service) SyncFromProvider(ctx context.Context, dp provider.DataProvider
 			if end > len(players) {
 				end = len(players)
 			}
-			if err := s.upsertBatch(ctx, sportID, dp.Name(), players[i:end]); err != nil {
+			if err := s.upsertBatch(ctx, sportID, eff.Name(), players[i:end]); err != nil {
 				return err
 			}
 		}
@@ -235,21 +240,27 @@ func (s *Service) SyncInjuriesFromProvider(ctx context.Context, dp provider.Data
 	if dp == nil {
 		return nil
 	}
-	var sportID int
-	err := s.pool.QueryRow(ctx, `SELECT id FROM sports WHERE code = 'nfl'`).Scan(&sportID)
-	if err != nil {
-		return nil
-	}
-	updates, err := dp.SyncInjuries(ctx, provider.Sport{ID: sportID, Code: "nfl"})
-	if err != nil {
-		return err
-	}
-	for _, u := range updates {
-		_, _ = s.pool.Exec(ctx, `
-			UPDATE players SET
-				injury_status = $3, injury_body_part = $4, injury_notes = $5, updated_at = now()
-			WHERE sport_id = $1 AND provider_player_id = $2`,
-			sportID, u.ProviderPlayerID, nilStr(u.Status), nilStr(u.BodyPart), nilStr(u.Notes))
+	for _, code := range []string{"nfl", "nba", "mlb"} {
+		var sportID int
+		err := s.pool.QueryRow(ctx, `SELECT id FROM sports WHERE code = $1`, code).Scan(&sportID)
+		if err != nil {
+			continue
+		}
+		eff := dataprovider.ForSport(dp, code)
+		if eff == nil {
+			continue
+		}
+		updates, err := eff.SyncInjuries(ctx, provider.Sport{ID: sportID, Code: code})
+		if err != nil {
+			return err
+		}
+		for _, u := range updates {
+			_, _ = s.pool.Exec(ctx, `
+				UPDATE players SET
+					injury_status = $4, injury_body_part = $5, injury_notes = $6, updated_at = now()
+				WHERE sport_id = $1 AND provider = $2 AND provider_player_id = $3`,
+				sportID, eff.Name(), u.ProviderPlayerID, nilStr(u.Status), nilStr(u.BodyPart), nilStr(u.Notes))
+		}
 	}
 	return nil
 }

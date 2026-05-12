@@ -1,8 +1,9 @@
 // Package provider defines the abstraction over upstream sports data feeds.
 //
-// MVP ships with a Sleeper public API implementation (free, no key, the same
-// data layer that powers the Sleeper app). A SportsData.io implementation
-// will be added later for commissioners who want sub-minute live scoring.
+// MVP ships with a Sleeper public API implementation (free, no key, NFL+NBA).
+// MLB Stats API covers MLB when running with DATA_PROVIDER=sleeper. Optional
+// SportsData.io covers NFL, NBA, and MLB for commissioners who want vendor
+// stats on one key. See docs/ROADMAP.md for OIDC and deeper multi-sport work.
 //
 // Implementations must be safe for concurrent use; the worker invokes them
 // from multiple goroutines.

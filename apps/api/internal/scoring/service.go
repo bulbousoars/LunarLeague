@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bulbousoars/lunarleague/apps/api/internal/dataprovider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
@@ -73,40 +74,53 @@ func (s *Service) preview(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"points": pts})
 }
 
-// PollLiveStats is invoked by the worker on a 30s tick during NFL game
-// windows; it pulls the latest weekly stats from the provider and upserts
-// them into player_stats. Scoring is computed on read (not on write) so
-// scoring-rule changes take immediate effect.
+// PollLiveStats is invoked by the worker on a periodic tick. It pulls the
+// latest stat lines from the configured provider for every sport that has
+// games marked scheduled or in progress, then upserts player_stats.
 func (s *Service) PollLiveStats(ctx context.Context, dp provider.DataProvider) error {
 	if dp == nil {
 		return errors.New("no data provider")
 	}
-	// For NFL only, MVP. The worker calls us, we figure out current season+week
-	// from the games table.
-	var season, week int
-	err := s.pool.QueryRow(ctx, `
-		SELECT season, week FROM games
-		WHERE sport_id = (SELECT id FROM sports WHERE code = 'nfl')
-		  AND status IN ('in_progress','scheduled')
-		ORDER BY kickoff_at LIMIT 1`).Scan(&season, &week)
-	if err != nil {
-		return nil // no current week to poll
-	}
-	stats, err := dp.SyncWeekStats(ctx, provider.Sport{Code: "nfl"}, season, week)
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (g.sport_id, g.season, g.week)
+			g.sport_id, sp.code, g.season, g.week
+		FROM games g
+		JOIN sports sp ON sp.id = g.sport_id
+		WHERE g.status IN ('in_progress','scheduled')
+		ORDER BY g.sport_id, g.season, g.week, g.kickoff_at
+		LIMIT 32`)
 	if err != nil {
 		return err
 	}
-	for _, sl := range stats {
-		body, _ := json.Marshal(sl.Stats)
-		_, err := s.pool.Exec(ctx, `
-			INSERT INTO player_stats (sport_id, season, week, player_id, stats, is_final)
-			SELECT (SELECT id FROM sports WHERE code = 'nfl'), $1, $2, p.id, $4::jsonb, $5
-			FROM players p WHERE p.provider_player_id = $3 AND p.provider = $6
-			ON CONFLICT (sport_id, season, week, player_id) DO UPDATE
-				SET stats = EXCLUDED.stats, is_final = EXCLUDED.is_final, updated_at = now()`,
-			season, week, sl.ProviderPlayerID, string(body), sl.IsFinal, dp.Name())
+	defer rows.Close()
+	for rows.Next() {
+		var sportID int
+		var sportCode string
+		var season, week int
+		if err := rows.Scan(&sportID, &sportCode, &season, &week); err != nil {
+			return err
+		}
+		eff := dataprovider.ForSport(dp, sportCode)
+		if eff == nil {
+			continue
+		}
+		stats, err := eff.SyncWeekStats(ctx, provider.Sport{ID: sportID, Code: sportCode}, season, week)
 		if err != nil {
 			return err
+		}
+		for _, sl := range stats {
+			body, _ := json.Marshal(sl.Stats)
+			_, err := s.pool.Exec(ctx, `
+				INSERT INTO player_stats (sport_id, season, week, player_id, stats, is_final)
+				SELECT $1, $2, $3, p.id, $5::jsonb, $6
+				FROM players p
+				WHERE p.sport_id = $1 AND p.provider_player_id = $4 AND p.provider = $7
+				ON CONFLICT (sport_id, season, week, player_id) DO UPDATE
+					SET stats = EXCLUDED.stats, is_final = EXCLUDED.is_final, updated_at = now()`,
+				sportID, season, week, sl.ProviderPlayerID, string(body), sl.IsFinal, eff.Name())
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

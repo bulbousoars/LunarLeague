@@ -52,7 +52,7 @@ func (p *Provider) SyncPlayers(ctx context.Context, sport provider.Sport) ([]pro
 	}
 	out := make([]provider.Player, 0, len(raw))
 	for id, r := range raw {
-		out = append(out, r.toPlayer(id))
+		out = append(out, r.toPlayer(id, sport.Code))
 	}
 	return out, nil
 }
@@ -76,7 +76,7 @@ type rawPlayer struct {
 	YearsExp        *int     `json:"years_exp"`
 }
 
-func (r rawPlayer) toPlayer(id string) provider.Player {
+func (r rawPlayer) toPlayer(id, sportCode string) provider.Player {
 	heightIn := parseHeight(r.Height)
 	weightLb := parseInt(r.Weight)
 	return provider.Player{
@@ -97,7 +97,7 @@ func (r rawPlayer) toPlayer(id string) provider.Player {
 		WeightLbs:         weightLb,
 		College:           r.College,
 		YearsExp:          r.YearsExp,
-		HeadshotURL:       fmt.Sprintf("https://sleepercdn.com/content/nfl/players/thumb/%s.jpg", id),
+		HeadshotURL:       fmt.Sprintf("https://sleepercdn.com/content/%s/players/thumb/%s.jpg", sportCode, id),
 	}
 }
 
@@ -105,6 +105,9 @@ func (r rawPlayer) toPlayer(id string) provider.Player {
 
 // SyncWeekStats: Sleeper exposes /stats/{sport}/regular/{season}/{week}.
 func (p *Provider) SyncWeekStats(ctx context.Context, sport provider.Sport, season, week int) ([]provider.StatLine, error) {
+	if sport.Code != "nfl" && sport.Code != "nba" {
+		return nil, fmt.Errorf("sleeper: weekly stats not available for sport %q", sport.Code)
+	}
 	url := fmt.Sprintf("%s/stats/%s/regular/%d/%d", baseURL, sport.Code, season, week)
 	body, err := p.get(ctx, url)
 	if err != nil {
