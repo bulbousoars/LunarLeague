@@ -47,8 +47,8 @@ if [[ ! -f "$REPO_ROOT/deploy/.env" ]]; then
   exit 1
 fi
 
-# prod-deploy.sh lives next to this file; it cd's to deploy/ and runs git + compose + migrate when MIGRATE=1
-"$SCRIPT_DIR/prod-deploy.sh"
+# prod-deploy.sh is tracked as non-executable (100644); invoke with bash so git pull does not break the timer.
+bash "$SCRIPT_DIR/prod-deploy.sh"
 
 cd "$REPO_ROOT/deploy"
 API_PORT="$(grep -E '^API_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r"' | head -1 || true)"
