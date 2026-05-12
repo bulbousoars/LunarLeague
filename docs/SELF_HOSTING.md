@@ -28,7 +28,7 @@ That brings up:
 - `api` (Go HTTP + WebSocket server on :8000)
 - `worker` (Go background worker for sync, waivers, digests)
 - `web` (Next.js standalone server on :3000)
-- `caddy` (TLS on :80 / :443 when using [`docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml))
+- `caddy` (HTTP reverse proxy on **:80** when using [`docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml); put TLS at Traefik / your edge)
 
 The `api` and `web` services still publish their ports on the host for debugging; in production you can firewall those and rely on Caddy only.
 
@@ -46,9 +46,9 @@ MIGRATE=1 ./deploy/scripts/prod-deploy.sh   # also run migrations
 
 ### TLS without editing base compose
 
-[`deploy/docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml) layers Caddy on top of [`deploy/docker-compose.yml`](../deploy/docker-compose.yml). Set **`CADDY_DOMAIN`** and **`CADDY_EMAIL`** in `.env` for Let's Encrypt.
+[`deploy/docker-compose.caddy.yml`](../deploy/docker-compose.caddy.yml) layers Caddy on top of [`deploy/docker-compose.yml`](../deploy/docker-compose.yml). Caddy listens on **:80** and forwards to **`api:${API_PORT}`** and **`web:${WEB_PORT}`** (defaults `8000` / `3000`). **`CADDY_DOMAIN` / `CADDY_EMAIL` are no longer required** for this layout—terminate HTTPS at Traefik (or another edge proxy) and reach this stack over HTTP.
 
-The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `/ws/*` to the API, and everything else to Next.js.
+The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `/ws*` to the API, and everything else to Next.js.
 
 ## First-run checklist
 

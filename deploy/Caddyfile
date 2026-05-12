@@ -1,18 +1,19 @@
+# Homelab / Traefik: TLS usually terminates at the edge. This stack serves HTTP on
+# :80 only and proxies to api + web using the same ports they listen on inside Docker.
+# Set API_PORT / WEB_PORT in deploy/.env (defaults 8000 / 3000).
 {
-    email {$CADDY_EMAIL}
+	auto_https off
 }
 
-{$CADDY_DOMAIN} {
-    encode gzip zstd
+:80 {
+	encode gzip zstd
 
-    # API + WebSockets
-    @api path /v1/* /healthz /ws /ws/*
-    handle @api {
-        reverse_proxy api:8000
-    }
+	@api path /v1/* /healthz /ws /ws/*
+	handle @api {
+		reverse_proxy api:{$API_PORT}
+	}
 
-    # Everything else hits Next.js
-    handle {
-        reverse_proxy web:3000
-    }
+	handle {
+		reverse_proxy web:{$WEB_PORT}
+	}
 }
