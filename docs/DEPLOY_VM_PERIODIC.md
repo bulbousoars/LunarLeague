@@ -48,7 +48,7 @@ Use this when **lunarleague.dugganco.com** (or any host) should **pull the publi
    sudo systemctl list-timers | grep lunarleague
    ```
 
-   The shipped timer defaults to **every 2 minutes** (homelab). For production, edit `OnCalendar` in the timer file (e.g. four times daily) and consider `RandomizedDelaySec=300`.
+   The shipped timer uses **`OnBootSec`** + **`OnUnitInactiveSec=2min`**: a new deploy starts about **two minutes after the last one finished** (so long `docker compose --build` runs do not overlap). For wall-clock schedules, use `OnCalendar=` instead (see systemd.timer(5)).
 
    Use **`ExecStart=/bin/bash …/vm-periodic-deploy.sh`** (as in the repo unit): the deploy scripts are **not** marked executable in Git (`100644`), so a bare path fails with `status=203/EXEC` after `git reset --hard`.
 

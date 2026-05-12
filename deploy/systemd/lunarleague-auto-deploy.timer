@@ -2,11 +2,13 @@
 Description=Timer periodic Lunar League deploy from git
 
 [Timer]
-# Every 2 minutes (homelab / fast iteration). For production, prefer something
-# like OnCalendar=*-*-* 00,06,12,18:00 with RandomizedDelaySec=300.
-OnCalendar=*-*-* *:0/2:00
-Persistent=false
-RandomizedDelaySec=0
+# Monotonic: first run shortly after boot, then every 2 min *after the previous
+# deploy finishes* (avoids overlapping docker builds). Wall-clock OnCalendar was
+# unreliable on some hosts (stale next_elapse, NEXT shown as "-" in list-timers).
+Unit=lunarleague-auto-deploy.service
+OnBootSec=45s
+OnUnitInactiveSec=2min
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
