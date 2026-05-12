@@ -50,6 +50,8 @@ Use this when **lunarleague.dugganco.com** (or any host) should **pull the publi
 
    The default timer runs **every 6 hours** with a **5-minute** random delay. Adjust `OnCalendar` in the timer file.
 
+   Use **`ExecStart=/bin/bash …/vm-periodic-deploy.sh`** (as in the repo unit): the deploy scripts are **not** marked executable in Git (`100644`), so a bare path fails with `status=203/EXEC` after `git reset --hard`.
+
 6. **User permissions**: the `User=` in the service must be able to run **`docker compose`** and **`git`** on that tree. Common pattern: user in the **`docker`** group, or a narrow **`sudo`** wrapper (see homelab OpenBao deploy plan).
 
 ## Manual test
@@ -62,7 +64,7 @@ journalctl -u lunarleague-auto-deploy.service -n 50 --no-pager
 ## Cron alternative
 
 ```cron
-0 */6 * * * dduggan LUNARLEAGUE_COMPOSE_OVERLAY=realestate /mnt/storage/docker/lunarleague/app/deploy/scripts/vm-periodic-deploy.sh >>/var/log/lunarleague-auto-deploy.log 2>&1
+0 */6 * * * dduggan LUNARLEAGUE_COMPOSE_OVERLAY=realestate /bin/bash /mnt/storage/docker/lunarleague/app/deploy/scripts/vm-periodic-deploy.sh >>/var/log/lunarleague-auto-deploy.log 2>&1
 ```
 
 ## Relation to GitHub Actions
