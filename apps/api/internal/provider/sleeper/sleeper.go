@@ -76,6 +76,13 @@ type rawPlayer struct {
 	YearsExp        *int     `json:"years_exp"`
 }
 
+func nonNilStrSlice(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
 func (r rawPlayer) toPlayer(id, sportCode string) provider.Player {
 	heightIn := parseHeight(r.Height)
 	weightLb := parseInt(r.Weight)
@@ -85,7 +92,7 @@ func (r rawPlayer) toPlayer(id, sportCode string) provider.Player {
 		FirstName:         r.FirstName,
 		LastName:          r.LastName,
 		Position:          r.Position,
-		EligiblePositions: r.FantasyPositions,
+		EligiblePositions: nonNilStrSlice(r.FantasyPositions),
 		NFLTeam:           r.Team,
 		JerseyNumber:      r.Number,
 		Status:            r.Status,

@@ -233,6 +233,10 @@ func (s *Service) upsertBatch(ctx context.Context, sportID int, providerName str
 
 	for _, p := range batch {
 		extra, _ := json.Marshal(p.Extra)
+		elig := p.EligiblePositions
+		if elig == nil {
+			elig = []string{}
+		}
 		_, err := tx.Exec(ctx, `
 			INSERT INTO players (sport_id, provider, provider_player_id, full_name, first_name, last_name,
 				position, eligible_positions, nfl_team, jersey_number, status, injury_status,
@@ -258,7 +262,7 @@ func (s *Service) upsertBatch(ctx context.Context, sportID int, providerName str
 				headshot_url = EXCLUDED.headshot_url,
 				updated_at = now()`,
 			sportID, providerName, p.ProviderPlayerID, p.FullName, nilStr(p.FirstName), nilStr(p.LastName),
-			nilStr(p.Position), p.EligiblePositions, nilStr(p.NFLTeam), p.JerseyNumber,
+			nilStr(p.Position), elig, nilStr(p.NFLTeam), p.JerseyNumber,
 			nilStr(p.Status), nilStr(p.InjuryStatus), nilStr(p.InjuryBodyPart), nilStr(p.InjuryNotes),
 			p.Age, p.HeightInches, p.WeightLbs, nilStr(p.College), p.YearsExp,
 			nilStr(p.HeadshotURL), string(extra))
