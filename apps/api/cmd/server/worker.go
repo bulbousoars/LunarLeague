@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -25,11 +24,11 @@ import (
 //
 // Implementation note: this uses a simple in-process ticker scheduler. River is
 // declared in go.mod for future migration once we need durable cross-replica jobs.
-func runWorker(ctx context.Context, cfg *config.Config) error {
+func runWorker(ctx context.Context, cfg *config.Config) {
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("db connect", "err", err)
-		return fmt.Errorf("db connect: %w", err)
+		return
 	}
 	defer pool.Close()
 
@@ -44,7 +43,7 @@ func runWorker(ctx context.Context, cfg *config.Config) error {
 	dp, err := newDataProvider(cfg)
 	if err != nil {
 		slog.Error("data provider", "err", err)
-		return fmt.Errorf("data provider: %w", err)
+		return
 	}
 
 	playerSvc := player.NewService(pool)
@@ -81,7 +80,6 @@ func runWorker(ctx context.Context, cfg *config.Config) error {
 
 	<-ctx.Done()
 	slog.Info("worker shutting down")
-	return nil
 }
 
 type job struct {

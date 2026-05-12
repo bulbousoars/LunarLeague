@@ -170,25 +170,58 @@ func (s *Service) SyncFromProvider(ctx context.Context, dp provider.DataProvider
 		if eff == nil {
 			continue
 		}
-		players, err := eff.SyncPlayers(ctx, provider.Sport{ID: sportID, Code: code})
-		if err != nil {
-			return fmt.Errorf("%s players: %w", code, err)
-		}
-		if len(players) == 0 {
-			continue
-		}
-		batch := 500
-		for i := 0; i < len(players); i += batch {
-			end := i + batch
-			if end > len(players) {
-				end = len(players)
-			}
-			if err := s.upsertBatch(ctx, sportID, eff.Name(), players[i:end]); err != nil {
-				return err
-			}
+		if _, err := s.fetchAndUpsertPlayers(ctx, sportID, code, eff); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// SyncFromProviderForSport pulls the player universe for a single sport from the
+// configured data provider and upserts into the database. code must be nfl,
+// nba, or mlb (case-insensitive). The sport row must exist (run seed first).
+// Returns the number of players returned by the provider.
+func (s *Service) SyncFromProviderForSport(ctx context.Context, dp provider.DataProvider, code string) (int, error) {
+	if dp == nil {
+		return 0, errors.New("no provider")
+	}
+	code = strings.ToLower(strings.TrimSpace(code))
+	switch code {
+	case "nfl", "nba", "mlb":
+	default:
+		return 0, fmt.Errorf("unsupported sport %q", code)
+	}
+	var sportID int
+	err := s.pool.QueryRow(ctx, `SELECT id FROM sports WHERE code = $1`, code).Scan(&sportID)
+	if err != nil {
+		return 0, fmt.Errorf("sport %q not in database (run seed first): %w", code, err)
+	}
+	eff := dataprovider.ForSport(dp, code)
+	if eff == nil {
+		return 0, fmt.Errorf("no data provider for sport %s", code)
+	}
+	return s.fetchAndUpsertPlayers(ctx, sportID, code, eff)
+}
+
+func (s *Service) fetchAndUpsertPlayers(ctx context.Context, sportID int, code string, eff provider.DataProvider) (int, error) {
+	players, err := eff.SyncPlayers(ctx, provider.Sport{ID: sportID, Code: code})
+	if err != nil {
+		return 0, fmt.Errorf("%s players: %w", code, err)
+	}
+	if len(players) == 0 {
+		return 0, nil
+	}
+	batch := 500
+	for i := 0; i < len(players); i += batch {
+		end := i + batch
+		if end > len(players) {
+			end = len(players)
+		}
+		if err := s.upsertBatch(ctx, sportID, eff.Name(), players[i:end]); err != nil {
+			return 0, err
+		}
+	}
+	return len(players), nil
 }
 
 func (s *Service) upsertBatch(ctx context.Context, sportID int, providerName string, batch []provider.Player) error {

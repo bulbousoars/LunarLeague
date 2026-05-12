@@ -56,6 +56,7 @@ The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `
 2. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api seed` (inserts NFL/NBA/MLB rows in the `sports` table). **Alternatively**, sign in as the league **commissioner** and use **Players → Seed sports** in the web UI (same effect). Site **admins** (`is_admin`) can also call **`POST /v1/admin/seed`**.
 3. Open `https://your-domain/` and sign in with magic link.
 4. Create your league. The first user becomes the commissioner.
+5. Load player rosters for your league’s sport: **Players → Sync {NFL|NBA|MLB} players** (commissioner or admin) calls **`POST /v1/leagues/{id}/sync-players`** and only pulls that sport from the configured data provider. The **worker** still runs a full daily `player-sync` for all sports.
 
 To grant admin for the seed button (PostgreSQL):  
 `docker compose ... exec postgres psql -U $POSTGRES_USER $POSTGRES_DB -c "UPDATE users SET is_admin = true WHERE email = 'you@example.com';"`
@@ -65,7 +66,7 @@ To grant admin for the seed button (PostgreSQL):
 | Task | Command |
 | --- | --- |
 | Tail logs | `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env logs -f api worker web caddy` |
-| Re-sync players | `docker compose ... restart worker` (next tick syncs) |
+| Re-sync players | **Players** page → **Sync {sport} players** (commissioner/admin), or `docker compose ... restart worker` (next tick syncs all sports) |
 | Backup DB | `docker compose ... exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB > backup.sql` |
 | Update | `git pull && docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env up -d --build` (from `deploy/`) |
 

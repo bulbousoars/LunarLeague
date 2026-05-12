@@ -18,6 +18,8 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/sport"
 	"github.com/go-chi/chi/v5"
@@ -28,11 +30,13 @@ type Service struct {
 	pool      *db.DB
 	mailer    notify.Mailer
 	publicURL string
+	dp        provider.DataProvider
+	players   *player.Service
 }
 
-func NewService(pool *db.DB, mailer notify.Mailer, publicURL string) *Service {
+func NewService(pool *db.DB, mailer notify.Mailer, publicURL string, dp provider.DataProvider, players *player.Service) *Service {
 	pub := strings.TrimSpace(publicURL)
-	return &Service{pool: pool, mailer: mailer, publicURL: pub}
+	return &Service{pool: pool, mailer: mailer, publicURL: pub, dp: dp, players: players}
 }
 
 func (s *Service) Mount(r chi.Router) {
@@ -642,6 +646,49 @@ func (s *Service) seedSports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// SyncLeaguePlayers runs a one-off player universe sync for this league's sport
+// (NFL, NBA, or MLB). Same permission model as seedSports. Registered from the
+// HTTP router with an extended request timeout because provider pulls can be slow.
+func (s *Service) SyncLeaguePlayers(w http.ResponseWriter, r *http.Request) {
+	uid, err := httpx.UserID(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusUnauthorized, err)
+		return
+	}
+	leagueID := chi.URLParam(r, "leagueID")
+	if !s.canSee(r.Context(), leagueID, uid) {
+		httpx.WriteError(w, http.StatusForbidden, errors.New("not a member"))
+		return
+	}
+	if !s.isCommish(r.Context(), leagueID, uid) && !s.isAdmin(r.Context(), uid) {
+		httpx.WriteError(w, http.StatusForbidden, errors.New("commissioner or admin only"))
+		return
+	}
+	if s.dp == nil || s.players == nil {
+		httpx.WriteError(w, http.StatusServiceUnavailable, errors.New("player sync not configured"))
+		return
+	}
+	var sportCode string
+	err = s.pool.QueryRow(r.Context(), `
+		SELECT lower(sp.code) FROM leagues l
+		JOIN sports sp ON sp.id = l.sport_id
+		WHERE l.id = $1`, leagueID).Scan(&sportCode)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteError(w, http.StatusNotFound, errors.New("league not found"))
+			return
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	n, err := s.players.SyncFromProviderForSport(r.Context(), s.dp, sportCode)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "sport_code": sportCode, "count": n})
 }
 
 func (s *Service) isAdmin(ctx context.Context, uid string) bool {

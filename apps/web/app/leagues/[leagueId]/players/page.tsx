@@ -46,6 +46,19 @@ export default function PlayersPage() {
     },
   });
 
+  const syncPlayers = useMutation({
+    mutationFn: () =>
+      api<{ ok: boolean; sport_code: string; count: number }>(
+        `/v1/leagues/${leagueId}/sync-players`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ["players", "browse", sport, search, position, leagueId],
+      });
+    },
+  });
+
   return (
     <main className="container py-8">
       <h1 className="mb-4 text-2xl font-bold">Players</h1>
@@ -136,16 +149,17 @@ export default function PlayersPage() {
                   <p>
                     No players in the database for{" "}
                     <span className="font-mono text-fg">{sport}</span> yet. The
-                    worker must run a{" "}
+                    worker runs a daily{" "}
                     <code className="rounded bg-card px-1">player-sync</code> job
-                    to load rosters (often within 24h, or restart the worker for
-                    an immediate sync).
+                    for all sports, or you can pull players for{" "}
+                    <span className="font-mono text-fg">{sport}</span> only from
+                    the commissioner tools below.
                   </p>
                   <p className="mt-2 text-xs">
-                    First-time hosts also need sports rows (NFL/NBA/MLB). If you
-                    are signed in as this league&apos;s{" "}
+                    First-time hosts need sports rows (NFL/NBA/MLB) before player
+                    sync works. If you are signed in as this league&apos;s{" "}
                     <strong>commissioner</strong> (or a site admin), use the
-                    button below. Otherwise use the shell:{" "}
+                    buttons below. Otherwise use the shell:{" "}
                     <code className="rounded bg-card px-1">
                       docker compose run --rm api seed
                     </code>{" "}
@@ -154,16 +168,28 @@ export default function PlayersPage() {
                   </p>
                   {!authLoading && user && (
                     <div className="mt-4 flex flex-col items-center gap-2">
-                      <button
-                        type="button"
-                        className="btn-primary text-sm"
-                        disabled={seedSports.isPending}
-                        onClick={() => seedSports.mutate()}
-                      >
-                        {seedSports.isPending
-                          ? "Seeding sports…"
-                          : "Seed sports (NFL / NBA / MLB)"}
-                      </button>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          disabled={seedSports.isPending}
+                          onClick={() => seedSports.mutate()}
+                        >
+                          {seedSports.isPending
+                            ? "Seeding sports…"
+                            : "Seed sports (NFL / NBA / MLB)"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          disabled={syncPlayers.isPending || seedSports.isPending}
+                          onClick={() => syncPlayers.mutate()}
+                        >
+                          {syncPlayers.isPending
+                            ? `Syncing ${sport.toUpperCase()} players…`
+                            : `Sync ${sport.toUpperCase()} players`}
+                        </button>
+                      </div>
                       {seedSports.isError && (
                         <p className="text-xs text-red-300">
                           {seedSports.error instanceof ApiError
@@ -171,10 +197,26 @@ export default function PlayersPage() {
                             : "Request failed"}
                         </p>
                       )}
+                      {syncPlayers.isError && (
+                        <p className="text-xs text-red-300">
+                          {syncPlayers.error instanceof ApiError
+                            ? syncPlayers.error.message
+                            : "Request failed"}
+                        </p>
+                      )}
                       {seedSports.isSuccess && (
                         <p className="text-xs text-emerald-400/90">
-                          Sports table updated. Player rows still require a
-                          worker sync.
+                          Sports table updated. Run player sync if rosters are
+                          still empty.
+                        </p>
+                      )}
+                      {syncPlayers.isSuccess && (
+                        <p className="text-xs text-emerald-400/90">
+                          Loaded {syncPlayers.data?.count ?? 0} players for{" "}
+                          <span className="font-mono">
+                            {syncPlayers.data?.sport_code ?? sport}
+                          </span>
+                          .
                         </p>
                       )}
                     </div>

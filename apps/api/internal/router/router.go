@@ -45,7 +45,6 @@ func New(d *Deps) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
-	r.Use(middleware.Timeout(30 * time.Second))
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{d.Cfg.PublicWebURL},
@@ -56,8 +55,8 @@ func New(d *Deps) http.Handler {
 	}))
 
 	authSvc := auth.NewService(d.DB, d.Mailer, d.Cfg.PublicWebURL, []byte(d.Cfg.SecretKey))
-	leagueSvc := league.NewService(d.DB, d.Mailer, d.Cfg.PublicWebURL)
 	playerSvc := player.NewService(d.DB)
+	leagueSvc := league.NewService(d.DB, d.Mailer, d.Cfg.PublicWebURL, d.Provider, playerSvc)
 	rosterSvc := roster.NewService(d.DB)
 	scoringSvc := scoring.NewService(d.DB)
 	matchupSvc := matchup.NewService(d.DB)
@@ -83,15 +82,18 @@ func New(d *Deps) http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
+			r.Use(middleware.Timeout(90 * time.Second))
 			authSvc.Mount(r)
 		})
 
 		r.Route("/sports", func(r chi.Router) {
+			r.Use(middleware.Timeout(30 * time.Second))
 			r.Get("/", listSportsHandler(d.DB))
 		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(authSvc.Middleware)
+			r.Use(middleware.Timeout(30 * time.Second))
 
 			r.Get("/me", authSvc.MeHandler)
 			r.Patch("/me", authSvc.UpdateMeHandler)
@@ -114,6 +116,12 @@ func New(d *Deps) http.Handler {
 			scoringSvc.Mount(r)
 			chatSvc.Mount(r)
 			notifySvc.Mount(r)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authSvc.Middleware)
+			r.Use(middleware.Timeout(5 * time.Minute))
+			r.Post("/leagues/{leagueID}/sync-players", leagueSvc.SyncLeaguePlayers)
 		})
 	})
 

@@ -39,15 +39,9 @@ func main() {
 
 	switch cmd {
 	case "serve":
-		if err := runServe(ctx, cfg); err != nil {
-			slog.Error("serve failed", "err", err)
-			os.Exit(1)
-		}
+		runServe(ctx, cfg)
 	case "worker":
-		if err := runWorker(ctx, cfg); err != nil {
-			slog.Error("worker failed", "err", err)
-			os.Exit(1)
-		}
+		runWorker(ctx, cfg)
 	case "migrate":
 		runMigrate(ctx, args)
 	case "seed":

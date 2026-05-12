@@ -16,18 +16,18 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func runServe(ctx context.Context, cfg *config.Config) error {
+func runServe(ctx context.Context, cfg *config.Config) {
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("db connect", "err", err)
-		return fmt.Errorf("db connect: %w", err)
+		return
 	}
 	defer pool.Close()
 
 	rdbOpt, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		slog.Error("redis url", "err", err)
-		return fmt.Errorf("redis url: %w", err)
+		return
 	}
 	rdb := redis.NewClient(rdbOpt)
 	defer rdb.Close()
@@ -43,7 +43,7 @@ func runServe(ctx context.Context, cfg *config.Config) error {
 	dp, err := newDataProvider(cfg)
 	if err != nil {
 		slog.Error("data provider", "err", err)
-		return fmt.Errorf("data provider: %w", err)
+		return
 	}
 
 	hub := ws.NewHub(rdb)
@@ -81,5 +81,4 @@ func runServe(ctx context.Context, cfg *config.Config) error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutCtx)
-	return nil
 }
