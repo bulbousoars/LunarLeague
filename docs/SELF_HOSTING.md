@@ -53,7 +53,7 @@ The bundled [`Caddyfile`](../deploy/Caddyfile) routes `/v1/*`, `/healthz`, and `
 ## First-run checklist
 
 1. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api migrate up`
-2. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api seed` (inserts NFL/NBA/MLB rows in the `sports` table). **Alternatively**, sign in as a user with `is_admin = true` and use **Players → Seed sports** in the web UI (same effect).
+2. `docker compose -f docker-compose.yml -f docker-compose.caddy.yml --env-file .env run --rm api seed` (inserts NFL/NBA/MLB rows in the `sports` table). **Alternatively**, sign in as the league **commissioner** and use **Players → Seed sports** in the web UI (same effect). Site **admins** (`is_admin`) can also call **`POST /v1/admin/seed`**.
 3. Open `https://your-domain/` and sign in with magic link.
 4. Create your league. The first user becomes the commissioner.
 

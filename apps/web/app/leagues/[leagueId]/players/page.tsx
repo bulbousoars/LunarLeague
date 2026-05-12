@@ -12,7 +12,7 @@ export default function PlayersPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState("");
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
 
   const league = useQuery({
@@ -35,7 +35,10 @@ export default function PlayersPage() {
   const posOptions = positionsForSport(sport);
 
   const seedSports = useMutation({
-    mutationFn: () => api<{ ok: boolean }>("/v1/admin/seed", { method: "POST" }),
+    mutationFn: () =>
+      api<{ ok: boolean }>(`/v1/leagues/${leagueId}/seed-sports`, {
+        method: "POST",
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({
         queryKey: ["players", "browse", sport, search, position, leagueId],
@@ -139,15 +142,17 @@ export default function PlayersPage() {
                     an immediate sync).
                   </p>
                   <p className="mt-2 text-xs">
-                    First-time hosts also need sports rows (NFL/NBA/MLB). Admins
-                    can run that from here; everyone else can use the shell:{" "}
+                    First-time hosts also need sports rows (NFL/NBA/MLB). If you
+                    are signed in as this league&apos;s{" "}
+                    <strong>commissioner</strong> (or a site admin), use the
+                    button below. Otherwise use the shell:{" "}
                     <code className="rounded bg-card px-1">
                       docker compose run --rm api seed
                     </code>{" "}
                     or <code className="rounded bg-card px-1">make seed</code> in
                     dev.
                   </p>
-                  {user?.is_admin && (
+                  {!authLoading && user && (
                     <div className="mt-4 flex flex-col items-center gap-2">
                       <button
                         type="button"
@@ -173,6 +178,11 @@ export default function PlayersPage() {
                         </p>
                       )}
                     </div>
+                  )}
+                  {!authLoading && !user && (
+                    <p className="mt-3 text-xs text-muted">
+                      Sign in to run the sports seed from the browser.
+                    </p>
                   )}
                 </td>
               </tr>

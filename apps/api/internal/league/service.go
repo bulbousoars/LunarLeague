@@ -19,6 +19,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/sport"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -48,6 +49,7 @@ func (s *Service) Mount(r chi.Router) {
 
 	r.Get("/leagues/{leagueID}/members", s.listMembers)
 	r.Post("/leagues/{leagueID}/join", s.join)
+	r.Post("/leagues/{leagueID}/seed-sports", s.seedSports)
 
 	r.Get("/leagues/{leagueID}/teams", s.listTeams)
 	r.Post("/leagues/{leagueID}/teams", s.createTeam)
@@ -616,6 +618,36 @@ func (s *Service) claimTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// seedSports runs sport.Seed (same as `lunarleague seed`). Allowed for site
+// admins or the league commissioner — typical self-host setup never sets is_admin.
+func (s *Service) seedSports(w http.ResponseWriter, r *http.Request) {
+	uid, err := httpx.UserID(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusUnauthorized, err)
+		return
+	}
+	leagueID := chi.URLParam(r, "leagueID")
+	if !s.canSee(r.Context(), leagueID, uid) {
+		httpx.WriteError(w, http.StatusForbidden, errors.New("not a member"))
+		return
+	}
+	if !s.isCommish(r.Context(), leagueID, uid) && !s.isAdmin(r.Context(), uid) {
+		httpx.WriteError(w, http.StatusForbidden, errors.New("commissioner or admin only"))
+		return
+	}
+	if err := sport.Seed(r.Context(), s.pool); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Service) isAdmin(ctx context.Context, uid string) bool {
+	var admin bool
+	_ = s.pool.QueryRow(ctx, `SELECT is_admin FROM users WHERE id = $1`, uid).Scan(&admin)
+	return admin
 }
 
 // --- helpers ---
