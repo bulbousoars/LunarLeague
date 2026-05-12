@@ -1,16 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { League, Player } from "@/lib/types";
 import { positionsForSport } from "@/lib/sport-ui";
+import { useAuth } from "@/lib/auth-context";
 
 export default function PlayersPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState("");
+  const { user } = useAuth();
+  const qc = useQueryClient();
 
   const league = useQuery({
     queryKey: ["league", leagueId],
@@ -30,6 +33,15 @@ export default function PlayersPage() {
   });
 
   const posOptions = positionsForSport(sport);
+
+  const seedSports = useMutation({
+    mutationFn: () => api<{ ok: boolean }>("/v1/admin/seed", { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ["players", "browse", sport, search, position, leagueId],
+      });
+    },
+  });
 
   return (
     <main className="container py-8">
@@ -118,17 +130,50 @@ export default function PlayersPage() {
             {players.isSuccess && players.data?.players.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-muted">
-                  No players in the database for{" "}
-                  <span className="font-mono text-fg">{sport}</span> yet. Run a
-                  one-time seed and wait for the worker to sync:{" "}
-                  <code className="rounded bg-card px-1">
-                    docker compose run --rm api seed
-                  </code>{" "}
-                  (or <code className="rounded bg-card px-1">make seed</code> in
-                  dev), then restart or wait for the{" "}
-                  <code className="rounded bg-card px-1">worker</code> (
-                  <code className="rounded bg-card px-1">player-sync</code> job,
-                  ~24h cycle, or restart worker for an immediate sync).
+                  <p>
+                    No players in the database for{" "}
+                    <span className="font-mono text-fg">{sport}</span> yet. The
+                    worker must run a{" "}
+                    <code className="rounded bg-card px-1">player-sync</code> job
+                    to load rosters (often within 24h, or restart the worker for
+                    an immediate sync).
+                  </p>
+                  <p className="mt-2 text-xs">
+                    First-time hosts also need sports rows (NFL/NBA/MLB). Admins
+                    can run that from here; everyone else can use the shell:{" "}
+                    <code className="rounded bg-card px-1">
+                      docker compose run --rm api seed
+                    </code>{" "}
+                    or <code className="rounded bg-card px-1">make seed</code> in
+                    dev.
+                  </p>
+                  {user?.is_admin && (
+                    <div className="mt-4 flex flex-col items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary text-sm"
+                        disabled={seedSports.isPending}
+                        onClick={() => seedSports.mutate()}
+                      >
+                        {seedSports.isPending
+                          ? "Seeding sports…"
+                          : "Seed sports (NFL / NBA / MLB)"}
+                      </button>
+                      {seedSports.isError && (
+                        <p className="text-xs text-red-300">
+                          {seedSports.error instanceof ApiError
+                            ? seedSports.error.message
+                            : "Request failed"}
+                        </p>
+                      )}
+                      {seedSports.isSuccess && (
+                        <p className="text-xs text-emerald-400/90">
+                          Sports table updated. Player rows still require a
+                          worker sync.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             )}

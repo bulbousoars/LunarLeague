@@ -126,7 +126,8 @@ export type Draft = {
   completed_at?: string | null;
   draft_order: string[];
   config: Record<string, unknown>;
-  picks: DraftPick[];
+  /** Present as [] from API; may be missing on older responses — treat as []. */
+  picks?: DraftPick[];
   on_the_clock?: OnTheClock | null;
 };
 

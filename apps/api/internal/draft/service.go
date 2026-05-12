@@ -71,7 +71,7 @@ type Draft struct {
 	CompletedAt       *string   `json:"completed_at,omitempty"`
 	DraftOrder        []string  `json:"draft_order"`
 	Config            JSONMap   `json:"config"`
-	Picks             []Pick    `json:"picks,omitempty"`
+	Picks             []Pick    `json:"picks"` // never omit: clients must always get an array (empty is [])
 	OnTheClock        *OnClock  `json:"on_the_clock,omitempty"`
 }
 
@@ -150,6 +150,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	d.DraftOrder = req.DraftOrder
 	d.Config = cfg
+	d.Picks = []Pick{}
 	httpx.WriteJSON(w, http.StatusCreated, d)
 }
 
@@ -161,6 +162,9 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	picks, _ := s.loadPicks(r.Context(), d.ID)
+	if picks == nil {
+		picks = []Pick{}
+	}
 	d.Picks = picks
 	if d.Status == "in_progress" {
 		clk := s.computeOnClock(d)

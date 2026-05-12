@@ -325,6 +325,27 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// RequireAdmin runs after Middleware and returns 403 unless the user is an admin.
+func (s *Service) RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uid, err := httpx.UserID(r.Context())
+		if err != nil {
+			httpx.WriteError(w, http.StatusUnauthorized, err)
+			return
+		}
+		u, err := s.LoadUser(r.Context(), uid)
+		if err != nil {
+			httpx.WriteError(w, http.StatusForbidden, errors.New("user not found"))
+			return
+		}
+		if !u.IsAdmin {
+			httpx.WriteError(w, http.StatusForbidden, errors.New("admin only"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // UserIDFromRequest is exposed so the WS handler can authenticate connection
 // upgrades (where middleware composition is awkward).
 func (s *Service) UserIDFromRequest(r *http.Request) (string, error) {

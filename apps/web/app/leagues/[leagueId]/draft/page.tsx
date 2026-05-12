@@ -43,8 +43,13 @@ export default function DraftRoomPage() {
   // Subscribe to draft events
   const wsRef = useRef<WebSocket | null>(null);
   useEffect(() => {
-    if (!draft.data) return;
-    const ws = new WebSocket(wsURL(`/ws/draft/${draft.data.id}`));
+    if (!draft.data?.id) return;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsURL(`/ws/draft/${draft.data.id}`));
+    } catch {
+      return;
+    }
     wsRef.current = ws;
     ws.onmessage = () => qc.invalidateQueries({ queryKey: ["draft", leagueId] });
     return () => ws.close();
@@ -123,11 +128,14 @@ export default function DraftRoomPage() {
   if (!draft.data) return null;
 
   const d = draft.data;
+  const picks = d.picks ?? [];
   const myTeamId = teams.data?.teams.find((t) => t.owner_id === user?.id)?.id;
   const onClock = d.on_the_clock;
   const myTurn = onClock?.team_id === myTeamId;
 
-  const drafted = new Set(d.picks.filter((p) => p.player_id).map((p) => p.player_id!));
+  const drafted = new Set(
+    picks.filter((p) => p.player_id).map((p) => p.player_id as string),
+  );
   const available = players.data?.players.filter((p) => !drafted.has(p.id)) ?? [];
 
   return (
@@ -136,7 +144,8 @@ export default function DraftRoomPage() {
         <div>
           <h1 className="text-2xl font-bold">Draft room</h1>
           <p className="text-sm text-muted">
-            {d.type.toUpperCase()} &middot; Round {(onClock?.round ?? 0) || "—"} of {d.rounds}
+            {(d.type ?? "snake").toUpperCase()} &middot; Round{" "}
+            {(onClock?.round ?? 0) || "—"} of {d.rounds}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -247,7 +256,7 @@ export default function DraftRoomPage() {
             Recent picks
           </h2>
           <div className="card max-h-[60vh] overflow-y-auto">
-            <RecentPicks picks={d.picks} teams={teams.data?.teams ?? []} />
+            <RecentPicks picks={picks} teams={teams.data?.teams ?? []} />
           </div>
         </section>
       </div>
@@ -267,10 +276,10 @@ function OnTheClockBanner({
   const [secs, setSecs] = useState(0);
   useEffect(() => {
     const tick = () => {
-      const left = Math.max(
-        0,
-        Math.floor((new Date(onClock.deadline).getTime() - Date.now()) / 1000),
-      );
+      const end = new Date(onClock.deadline).getTime();
+      const left = Number.isFinite(end)
+        ? Math.max(0, Math.floor((end - Date.now()) / 1000))
+        : 0;
       setSecs(left);
     };
     tick();
@@ -305,18 +314,22 @@ function RecentPicks({
   picks: DraftPick[];
   teams: Team[];
 }) {
+  const safePicks = picks ?? [];
   const teamMap = useMemo(
     () => Object.fromEntries(teams.map((t) => [t.id, t])),
     [teams],
   );
-  const made = picks.filter((p) => p.player_id).reverse().slice(0, 25);
+  const made = safePicks.filter((p) => p.player_id).reverse().slice(0, 25);
+  const nTeams = teams.length;
+  const slotInRound = (pickNo: number) =>
+    nTeams > 0 ? ((pickNo - 1) % nTeams) + 1 : "—";
   return (
     <ul className="space-y-2 text-sm">
       {made.map((p) => (
         <li key={p.id} className="flex items-center justify-between">
           <div>
             <div className="text-xs text-muted">
-              R{p.round}.{((p.pick_no - 1) % teams.length) + 1}
+              R{p.round}.{slotInRound(p.pick_no)}
             </div>
             <div>{teamMap[p.team_id]?.abbreviation ?? "—"}</div>
           </div>

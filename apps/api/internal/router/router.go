@@ -19,6 +19,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/roster"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/sport"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/trades"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/waivers"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/ws"
@@ -94,6 +95,14 @@ func New(d *Deps) http.Handler {
 
 			r.Get("/me", authSvc.MeHandler)
 			r.Patch("/me", authSvc.UpdateMeHandler)
+
+			r.With(authSvc.RequireAdmin).Post("/admin/seed", func(w http.ResponseWriter, r *http.Request) {
+				if err := sport.Seed(r.Context(), d.DB); err != nil {
+					httpx.WriteError(w, http.StatusInternalServerError, err)
+					return
+				}
+				httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+			})
 
 			leagueSvc.Mount(r)
 			playerSvc.Mount(r)
