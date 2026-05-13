@@ -196,6 +196,18 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 			if qw, err := strconv.Atoi(q.Get("week")); err == nil && qw >= 0 {
 				statsSeason, statsWeek = qs, qw
 				statsResolved = true
+			} else {
+				// season without week: latest week row for that season (same sport).
+				err := s.pool.QueryRow(r.Context(), `
+					SELECT ps.season, ps.week
+					FROM player_stats ps
+					JOIN sports sp2 ON sp2.id = ps.sport_id
+					WHERE sp2.code = $1 AND ps.season = $2
+					ORDER BY ps.week DESC
+					LIMIT 1`, sport, qs).Scan(&statsSeason, &statsWeek)
+				if err == nil {
+					statsResolved = true
+				}
 			}
 		}
 		if !statsResolved {
@@ -206,15 +218,6 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 				WHERE sp2.code = $1 AND ps.season = $2
 				ORDER BY ps.week DESC
 				LIMIT 1`, sport, aggSeason).Scan(&statsSeason, &statsWeek)
-			if err != nil {
-				err = s.pool.QueryRow(r.Context(), `
-					SELECT ps.season, ps.week
-					FROM player_stats ps
-					JOIN sports sp2 ON sp2.id = ps.sport_id
-					WHERE sp2.code = $1
-					ORDER BY ps.season DESC, ps.week DESC
-					LIMIT 1`, sport).Scan(&statsSeason, &statsWeek)
-			}
 			if err == nil {
 				statsResolved = true
 			}
@@ -374,17 +377,33 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		if qw, err := strconv.Atoi(q.Get("week")); err == nil && qw >= 0 {
 			statsSeason, statsWeek = qs, qw
 			statsResolved = true
+		} else {
+			err := s.pool.QueryRow(r.Context(), `
+				SELECT ps.season, ps.week
+				FROM player_stats ps
+				JOIN players p0 ON p0.id = ps.player_id
+				JOIN sports sp2 ON sp2.id = p0.sport_id
+				WHERE p0.id = $1 AND ps.season = $2
+				ORDER BY ps.week DESC
+				LIMIT 1`, id, qs).Scan(&statsSeason, &statsWeek)
+			if err == nil {
+				statsResolved = true
+			}
 		}
 	}
 	if !statsResolved {
+		aggSeason := 2025
+		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
+			aggSeason = v
+		}
 		err := s.pool.QueryRow(r.Context(), `
 			SELECT ps.season, ps.week
 			FROM player_stats ps
 			JOIN players p0 ON p0.id = ps.player_id
 			JOIN sports sp2 ON sp2.id = p0.sport_id
-			WHERE p0.id = $1
-			ORDER BY ps.season DESC, ps.week DESC
-			LIMIT 1`, id).Scan(&statsSeason, &statsWeek)
+			WHERE p0.id = $1 AND ps.season = $2
+			ORDER BY ps.week DESC
+			LIMIT 1`, id, aggSeason).Scan(&statsSeason, &statsWeek)
 		if err == nil {
 			statsResolved = true
 		}

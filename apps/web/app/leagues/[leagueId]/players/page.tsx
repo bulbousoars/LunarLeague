@@ -30,10 +30,10 @@ const AGGREGATE_STATS_SEASON = 2025;
 
 /** Sticky first column — must use opaque bg + border-separate on table for clean scroll. */
 const stickyPlayerTh =
-  "sticky left-0 z-30 min-w-[10.5rem] max-w-[13rem] whitespace-normal bg-card " +
+  "sticky left-0 z-30 min-w-[12rem] max-w-[15rem] whitespace-normal bg-card " +
   "border-r border-border shadow-[6px_0_14px_-6px_rgba(0,0,0,0.55)]";
 const stickyPlayerTd =
-  "sticky left-0 z-20 min-w-[10.5rem] max-w-[13rem] whitespace-normal bg-card " +
+  "sticky left-0 z-20 min-w-[12rem] max-w-[15rem] whitespace-normal bg-card " +
   "border-r border-border shadow-[6px_0_14px_-6px_rgba(0,0,0,0.55)] align-middle";
 const bioTh =
   "px-2.5 py-2.5 text-left align-bottom text-[11px] font-semibold uppercase tracking-wide text-muted";
@@ -52,7 +52,7 @@ const statBandTdClass = (band: "wk" | "ytd" | "avg") => {
       : band === "ytd"
         ? "bg-violet-500/[0.07]"
         : "bg-amber-500/[0.07]";
-  return `border-l border-border/80 px-2 py-1.5 text-right font-mono text-[12px] tabular-nums text-muted/95 min-w-[3.25rem] ${bandBg}`;
+  return `border-l border-border/80 px-2 py-1.5 text-right font-mono text-[12px] tabular-nums text-muted/95 min-w-[3.75rem] ${bandBg}`;
 };
 
 function cyclePrimary(current: SortRule | null, id: string): SortRule | null {
@@ -147,8 +147,10 @@ export default function PlayersPage() {
   const [page, setPage] = useState(1);
   const [onlyWithTeam, setOnlyWithTeam] = useState(true);
   const [includeStats, setIncludeStats] = useState(true);
-  /** Optional override for which `player_stats` row joins as “latest week”. */
-  const [statsSeasonIn, setStatsSeasonIn] = useState("");
+  /** Stat window: default to aggregate season (2025); week optional — API picks latest week for that season. */
+  const [statsSeasonIn, setStatsSeasonIn] = useState(
+    String(AGGREGATE_STATS_SEASON),
+  );
   const [statsWeekIn, setStatsWeekIn] = useState("");
   const { user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
@@ -175,9 +177,9 @@ export default function PlayersPage() {
       q.set("aggregate_season", String(AGGREGATE_STATS_SEASON));
       const ss = statsSeasonIn.trim();
       const sw = statsWeekIn.trim();
-      if (ss !== "" && sw !== "") {
+      if (ss !== "") {
         q.set("season", ss);
-        q.set("week", sw);
+        if (sw !== "") q.set("week", sw);
       }
     }
     return `/v1/players?${q.toString()}`;
@@ -212,8 +214,14 @@ export default function PlayersPage() {
   const weekOptions = useMemo(() => {
     const by = statsWindows.data?.weeks_by_season;
     if (!by || !statsSeasonIn) return [];
-    return by[statsSeasonIn] ?? [];
+    const raw = by[statsSeasonIn] ?? [];
+    return [...raw].sort((a, b) => b - a);
   }, [statsSeasonIn, statsWindows.data]);
+
+  useEffect(() => {
+    setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
+    setStatsWeekIn("");
+  }, [sport, leagueId]);
 
   useEffect(() => {
     if (!statsWindows.isSuccess || !statsWindows.data) return;
@@ -253,7 +261,7 @@ export default function PlayersPage() {
   /** Identity + bio: name, #, pos, elig, team, status, injury, age, ht, wt, exp, college (+ GP when stats on). */
   const baseColCount = 12 + (includeStats ? 1 : 0);
   const tableColSpan = baseColCount + statColGroup;
-  const tableMinWidth = 520 + baseColCount * 44 + statColGroup * 52;
+  const tableMinWidth = 560 + baseColCount * 48 + statColGroup * 58;
 
   const posOptions = positionsForSport(sport);
 
@@ -308,7 +316,7 @@ export default function PlayersPage() {
   });
 
   return (
-    <main className="container py-8">
+    <main className="w-full max-w-full px-3 py-8 sm:px-5 lg:px-8 xl:px-12 2xl:px-16">
       <h1 className="mb-4 text-2xl font-bold">Players</h1>
 
       {league.isLoading && (
@@ -371,8 +379,13 @@ export default function PlayersPage() {
             checked={includeStats}
             disabled={!league.isSuccess}
             onChange={(e) => {
-              setIncludeStats(e.target.checked);
+              const on = e.target.checked;
+              setIncludeStats(on);
               setPage(1);
+              if (on) {
+                setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
+                setStatsWeekIn("");
+              }
             }}
           />
           Load stat columns (latest week + season totals + per-week avg)
@@ -394,10 +407,13 @@ export default function PlayersPage() {
                   return;
                 }
                 const weeks = statsWindows.data?.weeks_by_season[v] ?? [];
-                setStatsWeekIn(weeks[0] != null ? String(weeks[0]) : "");
+                const sorted = [...weeks].sort((a, b) => b - a);
+                setStatsWeekIn(sorted[0] != null ? String(sorted[0]) : "");
               }}
             >
-              <option value="">Latest in DB</option>
+              <option value="">
+                Aggregate season only (no fixed week)
+              </option>
               {(statsWindows.data?.seasons ?? []).map((s) => (
                 <option key={s} value={String(s)}>
                   {s}
@@ -444,12 +460,12 @@ export default function PlayersPage() {
               className="btn text-xs"
               disabled={!league.isSuccess}
               onClick={() => {
-                setStatsSeasonIn("");
+                setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
                 setStatsWeekIn("");
                 setPage(1);
               }}
             >
-              Reset to latest
+              Reset to {AGGREGATE_STATS_SEASON}
             </button>
           </div>
         )}
@@ -476,7 +492,11 @@ export default function PlayersPage() {
               <span className="font-mono text-fg">{aggSeasonShown}</span> season
               totals, and per-week averages (mean over weeks with a{" "}
               <code className="rounded bg-card px-1">player_stats</code> row,
-              week &gt; 0). If YTD or averages are blank for{" "}
+              week &gt; 0). The stat window defaults to season{" "}
+              <span className="font-mono text-fg">{AGGREGATE_STATS_SEASON}</span>{" "}
+              (latest week for that season when you don&apos;t pick a week). Weekly
+              stats never borrow a different season, so they stay aligned with YTD.
+              If YTD or averages are blank for{" "}
               <span className="font-mono text-fg">{aggSeasonShown}</span>, the DB
               may not have weekly stat rows for that season yet (API workers sync
               live and final games and run a periodic backfill after deploy).
@@ -494,12 +514,108 @@ export default function PlayersPage() {
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start">
-        <div className="card min-w-0 overflow-hidden p-0">
+      <details className="mb-5 w-full rounded-lg border border-border bg-card/80 p-4 text-sm shadow-sm backdrop-blur-sm">
+        <summary className="cursor-pointer select-none text-base font-semibold text-fg">
+          Advanced sorting
+        </summary>
+        <div className="mt-4 space-y-3 text-muted">
+          <p className="max-w-5xl text-xs leading-relaxed text-muted">
+            Add multiple sort levels in order (e.g. YTD passing yards, then age).
+            Uses the same column keys as the table. Applies only to the current
+            page ({PAGE_SIZE} rows per request).
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {advancedSortRules.map((rule, idx) => (
+              <div
+                key={idx}
+                className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-border/60 bg-bg/40 p-2.5"
+              >
+                <span className="w-5 shrink-0 text-center text-[11px] font-mono text-muted">
+                  {idx + 1}
+                </span>
+                <select
+                  className="input min-w-0 flex-1 basis-[8rem] py-1.5 text-xs"
+                  aria-label={`Sort column level ${idx + 1}`}
+                  value={rule.id}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setAdvancedSortRules((prev) => {
+                      const next = prev.slice();
+                      next[idx] = { ...next[idx], id };
+                      return next;
+                    });
+                  }}
+                >
+                  {sortColumnOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="input w-[5.5rem] shrink-0 py-1.5 text-xs font-mono"
+                  aria-label={`Sort direction level ${idx + 1}`}
+                  value={rule.dir}
+                  onChange={(e) => {
+                    const dir = e.target.value as SortRule["dir"];
+                    setAdvancedSortRules((prev) => {
+                      const next = prev.slice();
+                      next[idx] = { ...next[idx], dir };
+                      return next;
+                    });
+                  }}
+                >
+                  <option value="asc">Asc</option>
+                  <option value="desc">Desc</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn shrink-0 px-2 py-1 text-xs"
+                  title="Remove this sort level"
+                  onClick={() => {
+                    setAdvancedSortRules((prev) =>
+                      prev.filter((_, i) => i !== idx),
+                    );
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn text-xs"
+              onClick={() => {
+                setAdvancedSortRules((prev) => [
+                  ...prev,
+                  {
+                    id: PLAYER_SORT_IDS.full_name,
+                    dir: "asc",
+                  },
+                ]);
+              }}
+            >
+              Add sort level
+            </button>
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={advancedSortRules.length === 0}
+              onClick={() => setAdvancedSortRules([])}
+            >
+              Clear all
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <div className="card w-full min-w-0 overflow-hidden border-border/90 p-0 shadow-md">
         <div className="overflow-x-auto overscroll-x-contain">
           <table
             className="w-full border-separate border-spacing-0 text-[13px] leading-snug"
-            style={{ minWidth: Math.max(960, tableMinWidth) }}
+            style={{ minWidth: Math.max(1040, tableMinWidth) }}
           >
             <thead className="bg-bg/60 text-muted backdrop-blur-sm [&_th]:align-middle">
               {includeStats && statKeys.length > 0 ? (
@@ -667,7 +783,7 @@ export default function PlayersPage() {
                         sortId={statSortId("wk", k)}
                         label={sk}
                         title={lk}
-                        className={`${statKeyTh} min-w-[3.25rem] border-l-sky-500/20 bg-sky-500/[0.08]`}
+                        className={`${statKeyTh} min-w-[3.75rem] border-l-sky-500/20 bg-sky-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("wk", k))}
@@ -682,7 +798,7 @@ export default function PlayersPage() {
                         sortId={statSortId("ytd", k)}
                         label={sk}
                         title={lk}
-                        className={`${statKeyTh} min-w-[3.25rem] border-l-violet-500/20 bg-violet-500/[0.08]`}
+                        className={`${statKeyTh} min-w-[3.75rem] border-l-violet-500/20 bg-violet-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("ytd", k))}
@@ -697,7 +813,7 @@ export default function PlayersPage() {
                         sortId={statSortId("avg", k)}
                         label={sk}
                         title={lk}
-                        className={`${statKeyTh} min-w-[3.25rem] border-l-amber-500/20 bg-amber-500/[0.08]`}
+                        className={`${statKeyTh} min-w-[3.75rem] border-l-amber-500/20 bg-amber-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("avg", k))}
@@ -1038,106 +1154,6 @@ export default function PlayersPage() {
             </tbody>
           </table>
         </div>
-        </div>
-
-        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-          <details className="rounded-lg border border-border bg-card/70 p-3 text-sm shadow-sm backdrop-blur-sm">
-            <summary className="cursor-pointer select-none font-semibold text-fg">
-              Advanced sorting
-            </summary>
-            <div className="mt-3 space-y-3 text-muted">
-              <p className="text-xs leading-relaxed text-muted">
-                Add multiple sort levels in order (e.g. YTD passing yards, then
-                age). Uses the same column keys as the table. Applies only to the
-                current page ({PAGE_SIZE} rows per request).
-              </p>
-              <div className="space-y-2">
-                {advancedSortRules.map((rule, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-bg/40 p-2"
-                  >
-                    <span className="w-5 shrink-0 text-center text-[11px] font-mono text-muted">
-                      {idx + 1}
-                    </span>
-                    <select
-                      className="input min-w-0 flex-1 py-1.5 text-xs"
-                      aria-label={`Sort column level ${idx + 1}`}
-                      value={rule.id}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        setAdvancedSortRules((prev) => {
-                          const next = prev.slice();
-                          next[idx] = { ...next[idx], id };
-                          return next;
-                        });
-                      }}
-                    >
-                      {sortColumnOptions.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="input w-[5.5rem] shrink-0 py-1.5 text-xs font-mono"
-                      aria-label={`Sort direction level ${idx + 1}`}
-                      value={rule.dir}
-                      onChange={(e) => {
-                        const dir = e.target.value as SortRule["dir"];
-                        setAdvancedSortRules((prev) => {
-                          const next = prev.slice();
-                          next[idx] = { ...next[idx], dir };
-                          return next;
-                        });
-                      }}
-                    >
-                      <option value="asc">Asc</option>
-                      <option value="desc">Desc</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="btn shrink-0 px-2 py-1 text-xs"
-                      title="Remove this sort level"
-                      onClick={() => {
-                        setAdvancedSortRules((prev) =>
-                          prev.filter((_, i) => i !== idx),
-                        );
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn text-xs"
-                  onClick={() => {
-                    setAdvancedSortRules((prev) => [
-                      ...prev,
-                      {
-                        id: PLAYER_SORT_IDS.full_name,
-                        dir: "asc",
-                      },
-                    ]);
-                  }}
-                >
-                  Add sort level
-                </button>
-                <button
-                  type="button"
-                  className="btn text-xs"
-                  disabled={advancedSortRules.length === 0}
-                  onClick={() => setAdvancedSortRules([])}
-                >
-                  Clear all
-                </button>
-              </div>
-            </div>
-          </details>
-        </aside>
       </div>
 
       {players.isSuccess && total > PAGE_SIZE && (
