@@ -38,6 +38,14 @@ export function statCell(
   return "—";
 }
 
+/** Human-readable height from total inches (e.g. 6'2"). */
+export function formatHeightInches(inches: number | null | undefined): string {
+  if (inches == null || inches <= 0) return "—";
+  const ft = Math.floor(inches / 12);
+  const inch = inches % 12;
+  return `${ft}'${inch}"`;
+}
+
 export function formatProfileBrief(p: {
   age?: number | null;
   height_inches?: number | null;
@@ -48,9 +56,7 @@ export function formatProfileBrief(p: {
   const bits: string[] = [];
   if (p.age != null && p.age > 0) bits.push(`age ${p.age}`);
   if (p.height_inches != null && p.height_inches > 0) {
-    const ft = Math.floor(p.height_inches / 12);
-    const inch = p.height_inches % 12;
-    bits.push(`${ft}'${inch}"`);
+    bits.push(formatHeightInches(p.height_inches));
   }
   if (p.weight_lbs != null && p.weight_lbs > 0) bits.push(`${p.weight_lbs} lb`);
   if (p.years_exp != null && p.years_exp >= 0) bits.push(`${p.years_exp} y exp`);

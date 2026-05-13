@@ -5,7 +5,10 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { League, PlayersListResponse } from "@/lib/types";
-import { formatProfileBrief, statCell } from "@/lib/player-stats";
+import {
+  formatHeightInches,
+  statCell,
+} from "@/lib/player-stats";
 import { positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
 
@@ -80,8 +83,10 @@ export default function PlayersPage() {
     players.data?.aggregate_season ?? AGGREGATE_STATS_SEASON;
   const statColGroup =
     includeStats && statKeys.length > 0 ? statKeys.length * 3 : 0;
-  const tableColSpan = 6 + statColGroup;
-  const tableMinWidth = 720 + statColGroup * 56;
+  /** Identity + bio: name, #, pos, elig, team, status, injury, age, ht, wt, exp, college (+ GP when stats on). */
+  const baseColCount = 12 + (includeStats ? 1 : 0);
+  const tableColSpan = baseColCount + statColGroup;
+  const tableMinWidth = 520 + baseColCount * 44 + statColGroup * 52;
 
   const posOptions = positionsForSport(sport);
 
@@ -268,13 +273,34 @@ export default function PlayersPage() {
                       Pos
                     </th>
                     <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Elig
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
                       Team
                     </th>
                     <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
                       Status
                     </th>
                     <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
-                      Profile
+                      Inj
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Age
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Ht
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Wt
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Exp
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      College
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      GP
                     </th>
                     <th
                       colSpan={statKeys.length}
@@ -327,9 +353,18 @@ export default function PlayersPage() {
                   <th className="px-3 py-2 text-left">Player</th>
                   <th className="px-3 py-2 text-left">#</th>
                   <th className="px-3 py-2 text-left">Pos</th>
+                  <th className="px-3 py-2 text-left">Elig</th>
                   <th className="px-3 py-2 text-left">Team</th>
                   <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Profile</th>
+                  <th className="px-3 py-2 text-left">Inj</th>
+                  <th className="px-3 py-2 text-left">Age</th>
+                  <th className="px-3 py-2 text-left">Ht</th>
+                  <th className="px-3 py-2 text-left">Wt</th>
+                  <th className="px-3 py-2 text-left">Exp</th>
+                  <th className="px-3 py-2 text-left">College</th>
+                  {includeStats && (
+                    <th className="px-3 py-2 text-left">GP</th>
+                  )}
                 </tr>
               )}
             </thead>
@@ -370,22 +405,58 @@ export default function PlayersPage() {
                         {p.jersey_number != null ? p.jersey_number : "—"}
                       </td>
                       <td className="px-3 py-2 text-muted">{p.position ?? "—"}</td>
+                      <td
+                        className="max-w-[140px] truncate px-3 py-2 text-xs text-muted"
+                        title={
+                          p.eligible_positions?.length
+                            ? p.eligible_positions.join(", ")
+                            : undefined
+                        }
+                      >
+                        {p.eligible_positions?.length
+                          ? p.eligible_positions.join(", ")
+                          : "—"}
+                      </td>
                       <td className="px-3 py-2 text-muted">{p.nfl_team ?? "—"}</td>
                       <td className="px-3 py-2 text-muted">
-                        {p.injury_status ? (
+                        {p.status?.trim() || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-muted">
+                        {p.injury_status?.trim() ? (
                           <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300">
                             {p.injury_status}
                           </span>
                         ) : (
-                          p.status ?? "—"
+                          "—"
                         )}
                       </td>
-                      <td
-                        className="max-w-[220px] truncate px-3 py-2 text-xs text-muted"
-                        title={formatProfileBrief(p)}
-                      >
-                        {formatProfileBrief(p)}
+                      <td className="px-3 py-2 text-right font-mono text-muted">
+                        {p.age != null && p.age > 0 ? p.age : "—"}
                       </td>
+                      <td className="px-3 py-2 font-mono text-muted">
+                        {formatHeightInches(p.height_inches)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-muted">
+                        {p.weight_lbs != null && p.weight_lbs > 0
+                          ? p.weight_lbs
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-muted">
+                        {p.years_exp != null && p.years_exp >= 0 ? p.years_exp : "—"}
+                      </td>
+                      <td
+                        className="max-w-[160px] truncate px-3 py-2 text-xs text-muted"
+                        title={p.college?.trim() || undefined}
+                      >
+                        {p.college?.trim() || "—"}
+                      </td>
+                      {includeStats && (
+                        <td className="px-3 py-2 text-right font-mono text-muted">
+                          {p.season_weeks != null && p.season_weeks > 0
+                            ? p.season_weeks
+                            : "—"}
+                        </td>
+                      )}
                       {includeStats && statKeys.length > 0
                         ? statKeys.map((k) => (
                             <td
