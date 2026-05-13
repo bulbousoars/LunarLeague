@@ -2,9 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { League, PlayersListResponse } from "@/lib/types";
+import type {
+  League,
+  PlayerStatsWindowsResponse,
+  PlayersListResponse,
+} from "@/lib/types";
 import {
   formatHeightInches,
   statCell,
@@ -75,6 +79,49 @@ export default function PlayersPage() {
     retry: 2,
   });
 
+  const statsWindows = useQuery({
+    queryKey: ["players", "stats-windows", sport],
+    queryFn: () =>
+      api<PlayerStatsWindowsResponse>(
+        `/v1/players/stats-windows?sport=${encodeURIComponent(sport)}`,
+      ),
+    enabled: league.isSuccess && includeStats,
+    staleTime: 60_000,
+  });
+
+  const weekOptions = useMemo(() => {
+    const by = statsWindows.data?.weeks_by_season;
+    if (!by || !statsSeasonIn) return [];
+    return by[statsSeasonIn] ?? [];
+  }, [statsSeasonIn, statsWindows.data]);
+
+  useEffect(() => {
+    if (!statsWindows.isSuccess || !statsWindows.data) return;
+    const seasons = statsWindows.data.seasons;
+    if (!statsSeasonIn) return;
+    const y = Number(statsSeasonIn);
+    if (!Number.isFinite(y) || !seasons.includes(y)) {
+      setStatsSeasonIn("");
+      setStatsWeekIn("");
+    }
+  }, [statsSeasonIn, statsWindows.isSuccess, statsWindows.data]);
+
+  useEffect(() => {
+    if (!statsSeasonIn || !statsWindows.data) return;
+    if (!weekOptions.length) {
+      if (statsWeekIn !== "") setStatsWeekIn("");
+      return;
+    }
+    const wn = Number(statsWeekIn);
+    if (
+      statsWeekIn === "" ||
+      !Number.isFinite(wn) ||
+      !weekOptions.includes(wn)
+    ) {
+      setStatsWeekIn(String(weekOptions[0]));
+    }
+  }, [statsSeasonIn, statsWeekIn, weekOptions, statsWindows.data]);
+
   const total = players.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -99,6 +146,9 @@ export default function PlayersPage() {
       void qc.invalidateQueries({
         queryKey: ["players", "browse"],
       });
+      void qc.invalidateQueries({
+        queryKey: ["players", "stats-windows"],
+      });
     },
   });
 
@@ -111,6 +161,9 @@ export default function PlayersPage() {
     onSuccess: () => {
       void qc.invalidateQueries({
         queryKey: ["players", "browse"],
+      });
+      void qc.invalidateQueries({
+        queryKey: ["players", "stats-windows"],
       });
     },
   });
@@ -187,29 +240,66 @@ export default function PlayersPage() {
         </label>
         {includeStats && (
           <div className="flex w-full basis-full flex-wrap items-center gap-2 text-sm text-muted">
-            <span className="whitespace-nowrap">Stat window override</span>
-            <input
-              className="input w-24 font-mono"
-              inputMode="numeric"
-              placeholder="Season"
+            <span className="whitespace-nowrap">Stat window</span>
+            <select
+              className="input w-[7.5rem] font-mono"
+              aria-label="Stats season"
               value={statsSeasonIn}
-              disabled={!league.isSuccess}
+              disabled={!league.isSuccess || statsWindows.isLoading}
               onChange={(e) => {
-                setStatsSeasonIn(e.target.value);
+                const v = e.target.value;
+                setStatsSeasonIn(v);
                 setPage(1);
+                if (!v) {
+                  setStatsWeekIn("");
+                  return;
+                }
+                const weeks = statsWindows.data?.weeks_by_season[v] ?? [];
+                setStatsWeekIn(weeks[0] != null ? String(weeks[0]) : "");
               }}
-            />
-            <input
-              className="input w-20 font-mono"
-              inputMode="numeric"
-              placeholder="Week"
+            >
+              <option value="">Latest in DB</option>
+              {(statsWindows.data?.seasons ?? []).map((s) => (
+                <option key={s} value={String(s)}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input w-[7.5rem] font-mono"
+              aria-label="Stats week"
               value={statsWeekIn}
-              disabled={!league.isSuccess}
+              disabled={
+                !league.isSuccess ||
+                !statsSeasonIn ||
+                statsWindows.isLoading ||
+                weekOptions.length === 0
+              }
               onChange={(e) => {
                 setStatsWeekIn(e.target.value);
                 setPage(1);
               }}
-            />
+            >
+              {!statsSeasonIn || weekOptions.length === 0 ? (
+                <option value="">
+                  {!statsSeasonIn
+                    ? "—"
+                    : statsWindows.isLoading
+                      ? "…"
+                      : "No rows"}
+                </option>
+              ) : null}
+              {weekOptions.map((w) => (
+                <option key={w} value={String(w)}>
+                  Wk {w}
+                </option>
+              ))}
+            </select>
+            {statsWindows.isError && (
+              <span className="text-xs text-amber-300/90">
+                Could not load stat windows (dropdowns empty).
+              </span>
+            )}
             <button
               type="button"
               className="btn text-xs"
@@ -220,7 +310,7 @@ export default function PlayersPage() {
                 setPage(1);
               }}
             >
-              Use latest in DB
+              Reset to latest
             </button>
           </div>
         )}

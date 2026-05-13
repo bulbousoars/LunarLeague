@@ -18,9 +18,14 @@ Canonical phase list for the product (the README status table mirrors this file)
 
 ## Data providers
 
-- **Sleeper (default):** NFL + NBA players, schedules, weekly stats, injuries, trending. MLB is not on Sleeper; the API worker delegates MLB player sync (and MLB stats when polling) to the **MLB Stats API** provider while `DATA_PROVIDER=sleeper`.
-- **SportsData.io:** Optional paid key. NFL, NBA, and MLB on one key when your subscription includes those feeds (`DATA_PROVIDER=sportsdataio` + `SPORTSDATAIO_API_KEY`).
-- **MLB Stats API only:** `DATA_PROVIDER=mlbstatsapi` — useful for baseball-only installs; NFL/NBA are not populated.
+- **Sleeper (default — current focus):** NFL + NBA players, schedules, weekly stats, injuries, trending via the public Sleeper API. MLB is not on Sleeper; while `DATA_PROVIDER=sleeper`, the worker uses the **MLB Stats API** for MLB player sync and stats. This is the **bare minimum** external footprint we maintain day to day.
+- **SportsData.io:** **Deferred.** Scaffold exists (`apps/api/internal/provider/sportsdataio`); finish implementation, then document. Until then, self-hosters should stay on `DATA_PROVIDER=sleeper` (or `mlbstatsapi` for baseball-only).
+- **MLB Stats API only:** `DATA_PROVIDER=mlbstatsapi` — baseball-only installs; NFL/NBA are not populated.
+
+### Premium provider keys (planned)
+
+1. **Phase A — operator:** keep env-based `SPORTSDATAIO_API_KEY` + `DATA_PROVIDER=sportsdataio` for people comfortable editing `.env` / secrets manager (e.g. OpenBao, Docker secrets).
+2. **Phase B — product:** let **site admins** (`is_admin`) and/or **league commissioners** configure or rotate a SportsData.io (or other paid) key from the web app, stored server-side (encrypted at rest, never returned in full after save). Exact scope (global vs per-league) TBD when SDIO ships.
 
 ## Jobs / scale
 

@@ -85,16 +85,11 @@ It SSHs to your host, **git fast-forwards** the repo root (parent of `deploy/`),
 
 Point **`PUBLIC_WEB_URL`** and **`PUBLIC_API_URL`** in `.env` at your real HTTPS domain (e.g. `https://lunarleague.dugganco.com`) so magic-link and league emails link correctly.
 
-## Premium data provider (SportsData.io)
+## Data provider (Sleeper by default)
 
-The free Sleeper provider covers **NFL and NBA**. **MLB** uses the official MLB Stats API automatically when `DATA_PROVIDER=sleeper` (no extra key). For all three sports on one commercial feed, use SportsData.io:
+**Recommended:** leave `DATA_PROVIDER=sleeper` (default in `deploy/.env.example`). That uses the free Sleeper API for NFL/NBA and automatically uses the **MLB Stats API** for MLB—no commercial sports feed key required.
 
-```bash
-DATA_PROVIDER=sportsdataio
-SPORTSDATAIO_API_KEY=your-key-here
-```
-
-SportsData.io subscriptions are per product; ensure your key includes the NFL, NBA, and/or MLB endpoints you need. The provider abstraction in `apps/api/internal/provider/` maps env → implementation.
+**SportsData.io** is scaffolded but **not** the supported path yet; see [docs/DATA_PROVIDERS.md](DATA_PROVIDERS.md) and [docs/ROADMAP.md](ROADMAP.md). When it ships, keys will begin as env vars; later we plan **admin/commissioner UI** to manage keys without hand-editing production files.
 
 **MLB-only** installs can set `DATA_PROVIDER=mlbstatsapi` (no Sleeper NFL/NBA universe).
 

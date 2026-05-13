@@ -1,5 +1,10 @@
 // Package sportsdataio implements provider.DataProvider against SportsData.io
 // v3 JSON feeds (requires SPORTSDATAIO_API_KEY and an appropriate subscription).
+//
+// Status: deferred — the product currently targets the free Sleeper + MLB Stats
+// API path. Finish coverage, tests, and live polling before recommending
+// DATA_PROVIDER=sportsdataio in production. Key management will later support
+// env-based secrets first, then admin/commissioner UI (see docs/ROADMAP.md).
 package sportsdataio
 
 import (

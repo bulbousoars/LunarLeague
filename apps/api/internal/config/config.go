@@ -73,7 +73,7 @@ func Load() (*Config, error) {
 	}
 	switch c.DataProvider {
 	case "sleeper", "mlbstatsapi":
-	case "sportsdataio":
+	case "sportsdataio": // scaffolded provider; not the default supported path — see docs/DATA_PROVIDERS.md
 		if c.SportsDataIOAPIKey == "" {
 			return nil, errors.New("SPORTSDATAIO_API_KEY is required when DATA_PROVIDER=sportsdataio")
 		}

@@ -89,6 +89,13 @@ export type PlayersListResponse = {
   current_stats_week?: number | null;
 };
 
+/** Distinct (season, week) rows in `player_stats` for stat-window dropdowns. */
+export type PlayerStatsWindowsResponse = {
+  seasons: number[];
+  /** JSON object keys are season years as strings. */
+  weeks_by_season: Record<string, number[]>;
+};
+
 export type RosterEntry = {
   id: string;
   player_id: string;

@@ -14,7 +14,7 @@ func newDataProvider(cfg *config.Config) (provider.DataProvider, error) {
 	switch cfg.DataProvider {
 	case "sleeper":
 		return sleeper.New(), nil
-	case "sportsdataio":
+	case "sportsdataio": // deferred — see docs/DATA_PROVIDERS.md
 		return sportsdataio.New(cfg.SportsDataIOAPIKey), nil
 	case "mlbstatsapi":
 		return mlbstatsapi.New(), nil

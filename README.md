@@ -2,7 +2,7 @@
 
 Open-source, self-hosted, Docker Compose deployable, multi-tenant fantasy sports platform.
 
-NFL first. NBA and MLB next. Built around a pluggable sports-data provider model so you can run on free Sleeper API data or drop in a paid SportsData.io key for premium real-time stats.
+NFL first. NBA and MLB next. **Right now the supported stack is the free Sleeper API** (NFL/NBA) plus the MLB Stats API bridge for baseball when `DATA_PROVIDER=sleeper`. A paid **SportsData.io** provider is scaffolded for later (sub-minute live stats, projections); we will add a straightforward way for **site admins / commissioners** to supply or rotate that key after the integration is finished.
 
 ## Why
 

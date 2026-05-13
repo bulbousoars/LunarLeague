@@ -2,6 +2,10 @@
 
 Lunar League runs on a pluggable `DataProvider` interface. Pick one (or write your own) by setting the `DATA_PROVIDER` env var.
 
+## What we run today
+
+**Default and recommended:** `DATA_PROVIDER=sleeper`. That path is what we develop and test against: NFL/NBA from Sleeper, MLB player sync and stats from the **MLB Stats API** helper (no extra key). Treat this as the **bare minimum Sleeper footprint** until premium feeds are fully integrated.
+
 ## Sleeper (default — free)
 
 ```bash
@@ -23,14 +27,11 @@ Uses the public, unauthenticated [Sleeper API](https://docs.sleeper.com/) at `ht
 | Auth | none (free) |
 | Rate limits | ~1000 req/min |
 
-## SportsData.io (paid — premium)
+## SportsData.io (paid — deferred)
 
-```bash
-DATA_PROVIDER=sportsdataio
-SPORTSDATAIO_API_KEY=your-key
-```
+**Not production-ready.** Code lives under `apps/api/internal/provider/sportsdataio` as a starting point; wiring, coverage, and tests are incomplete. Prefer **`DATA_PROVIDER=sleeper`** until this is explicitly marked done in [ROADMAP.md](ROADMAP.md).
 
-For commissioners who want sub-minute live scoring during NFL games. The Fantasy Sports tier is ~$19/mo as of 2026 and includes real-time stats, projections, news, and DFS slates. (Implementation lives at `apps/api/internal/provider/sportsdataio` — currently scaffolded; see issue tracker for status.)
+When we ship it, keys will start as **deployment env** (`SPORTSDATAIO_API_KEY`) for operators; a follow-up is **UI for admins/commissioners** to set or rotate a league-scoped or instance-scoped key without editing server files (see roadmap).
 
 ## MLB Stats API (free, MLB only)
 

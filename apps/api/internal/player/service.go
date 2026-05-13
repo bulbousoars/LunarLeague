@@ -34,8 +34,57 @@ func NewService(pool *db.DB) *Service { return &Service{pool: pool} }
 
 func (s *Service) Mount(r chi.Router) {
 	r.Get("/players", s.list)
-	r.Get("/players/{playerID}", s.get)
+	// Static paths must be registered before /players/{playerID}.
+	r.Get("/players/stats-windows", s.statsWindows)
 	r.Get("/players/trending", s.trending)
+	r.Get("/players/{playerID}", s.get)
+}
+
+type statsWindowsResp struct {
+	Seasons       []int         `json:"seasons"`
+	WeeksBySeason map[int][]int `json:"weeks_by_season"`
+}
+
+func (s *Service) statsWindows(w http.ResponseWriter, r *http.Request) {
+	sport := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sport")))
+	if sport == "" {
+		sport = "nfl"
+	}
+	rows, err := s.pool.Query(r.Context(), `
+		SELECT DISTINCT ps.season, ps.week
+		FROM player_stats ps
+		JOIN sports sp ON sp.id = ps.sport_id
+		WHERE lower(sp.code) = $1
+		ORDER BY ps.season DESC, ps.week DESC`, sport)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer rows.Close()
+
+	seenSeason := map[int]struct{}{}
+	var seasons []int
+	bySeason := map[int][]int{}
+	for rows.Next() {
+		var season, week int
+		if err := rows.Scan(&season, &week); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if _, ok := seenSeason[season]; !ok {
+			seenSeason[season] = struct{}{}
+			seasons = append(seasons, season)
+		}
+		bySeason[season] = append(bySeason[season], week)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, statsWindowsResp{
+		Seasons:       seasons,
+		WeeksBySeason: bySeason,
+	})
 }
 
 type listResp struct {
