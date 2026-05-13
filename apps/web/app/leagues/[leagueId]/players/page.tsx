@@ -13,6 +13,7 @@ import {
   formatHeightInches,
   statCell,
 } from "@/lib/player-stats";
+import { statColumnLabels } from "@/lib/stat-labels";
 import { positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -658,42 +659,51 @@ export default function PlayersPage() {
                     </th>
                   </tr>
                   <tr>
-                    {statKeys.map((k) => (
+                    {statKeys.map((k) => {
+                      const { short: sk, long: lk } = statColumnLabels(k);
+                      return (
                       <SortThStat
                         key={`h-w-${k}`}
                         sortId={statSortId("wk", k)}
-                        label={k}
-                        title={k}
+                        label={sk}
+                        title={lk}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-sky-500/20 bg-sky-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("wk", k))}
                       />
-                    ))}
-                    {statKeys.map((k) => (
+                      );
+                    })}
+                    {statKeys.map((k) => {
+                      const { short: sk, long: lk } = statColumnLabels(k);
+                      return (
                       <SortThStat
                         key={`h-s-${k}`}
                         sortId={statSortId("ytd", k)}
-                        label={k}
-                        title={k}
+                        label={sk}
+                        title={lk}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-violet-500/20 bg-violet-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("ytd", k))}
                       />
-                    ))}
-                    {statKeys.map((k) => (
+                      );
+                    })}
+                    {statKeys.map((k) => {
+                      const { short: sk, long: lk } = statColumnLabels(k);
+                      return (
                       <SortThStat
                         key={`h-a-${k}`}
                         sortId={statSortId("avg", k)}
-                        label={k}
-                        title={k}
+                        label={sk}
+                        title={lk}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-amber-500/20 bg-amber-500/[0.08]`}
                         primary={primarySort}
                         advancedActive={advancedActive}
                         onCycle={() => cycleColumnSort(statSortId("avg", k))}
                       />
-                    ))}
+                      );
+                    })}
                   </tr>
                 </>
               ) : (
@@ -926,7 +936,7 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-w-${k}`}
-                              title={`${k} (latest week)`}
+                              title={`${statColumnLabels(k).long} (latest week)`}
                               className={statBandTdClass("wk")}
                             >
                               {statCell(wk, k)}
@@ -937,7 +947,7 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-s-${k}`}
-                              title={`${k} (season total)`}
+                              title={`${statColumnLabels(k).long} (season total)`}
                               className={statBandTdClass("ytd")}
                             >
                               {statCell(
@@ -951,7 +961,7 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-a-${k}`}
-                              title={`${k} (per-week avg)`}
+                              title={`${statColumnLabels(k).long} (per-week avg)`}
                               className={statBandTdClass("avg")}
                             >
                               {statCell(

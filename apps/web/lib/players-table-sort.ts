@@ -158,13 +158,16 @@ export const SORT_COLUMN_OPTIONS: { id: string; label: string }[] = [
   { id: PLAYER_SORT_IDS.gp, label: "GP" },
 ];
 
+import { statColumnLabels } from "@/lib/stat-labels";
+
 export function statColumnOptions(statKeys: string[]): { id: string; label: string }[] {
   const out: { id: string; label: string }[] = [...SORT_COLUMN_OPTIONS];
   for (const k of statKeys) {
+    const lab = statColumnLabels(k);
     out.push(
-      { id: statSortId("wk", k), label: `Wk · ${k}` },
-      { id: statSortId("ytd", k), label: `YTD · ${k}` },
-      { id: statSortId("avg", k), label: `Avg · ${k}` },
+      { id: statSortId("wk", k), label: `Wk · ${lab.short}` },
+      { id: statSortId("ytd", k), label: `YTD · ${lab.short}` },
+      { id: statSortId("avg", k), label: `Avg · ${lab.short}` },
     );
   }
   return out;
