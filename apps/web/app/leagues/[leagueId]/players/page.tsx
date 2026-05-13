@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { League, PlayersListResponse } from "@/lib/types";
-import { formatProfileBrief, summarizeWeeklyStats } from "@/lib/player-stats";
+import { formatProfileBrief, statCell } from "@/lib/player-stats";
 import { positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
 
@@ -38,9 +38,20 @@ export default function PlayersPage() {
     if (search.trim()) q.set("q", search.trim());
     if (position) q.set("position", position);
     if (onlyWithTeam) q.set("has_team", "1");
-    if (includeStats) q.set("include_stats", "1");
+    if (includeStats) {
+      q.set("include_stats", "1");
+      q.set("aggregate_season", String(league.data?.season ?? 2025));
+    }
     return `/v1/players?${q.toString()}`;
-  }, [sport, offset, search, position, onlyWithTeam, includeStats]);
+  }, [
+    sport,
+    offset,
+    search,
+    position,
+    onlyWithTeam,
+    includeStats,
+    league.data?.season,
+  ]);
 
   const players = useQuery({
     queryKey: [
@@ -61,6 +72,14 @@ export default function PlayersPage() {
 
   const total = players.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const statKeys = players.data?.stat_columns ?? [];
+  const aggSeasonShown =
+    players.data?.aggregate_season ?? league.data?.season ?? 2025;
+  const statColGroup =
+    includeStats && statKeys.length > 0 ? statKeys.length * 3 : 0;
+  const tableColSpan = 6 + statColGroup;
+  const tableMinWidth = 720 + statColGroup * 56;
 
   const posOptions = positionsForSport(sport);
 
@@ -157,7 +176,7 @@ export default function PlayersPage() {
               setPage(1);
             }}
           />
-          Load latest weekly stat line (when synced)
+          Load stat columns (latest week + season totals + per-week avg)
         </label>
       </div>
 
@@ -168,52 +187,122 @@ export default function PlayersPage() {
             {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)}
           </strong>{" "}
           of <strong className="text-fg">{total}</strong> matching players
-          {includeStats &&
-            (() => {
-              const s = players.data?.players?.find(
-                (x) => x.stats_season != null && x.stats_week != null,
-              );
-              return s ? (
-                <span className="ml-1">
-                  · stat window{" "}
-                  <span className="font-mono text-fg">
-                    season {s.stats_season}, week {s.stats_week}
-                  </span>{" "}
-                  (latest row in <code className="rounded bg-card px-1">player_stats</code>{" "}
-                  for this sport; override with API query{" "}
-                  <code className="rounded bg-card px-1">season</code> +{" "}
-                  <code className="rounded bg-card px-1">week</code>)
-                </span>
-              ) : null;
-            })()}
+          {includeStats && statKeys.length > 0 && (
+            <span className="ml-1">
+              · per-stat columns: latest week (S
+              {players.data?.current_stats_season ?? "—"} W
+              {players.data?.current_stats_week ?? "—"}),{" "}
+              <span className="font-mono text-fg">{aggSeasonShown}</span> season
+              totals, and per-week averages (mean over weeks with a{" "}
+              <code className="rounded bg-card px-1">player_stats</code> row,
+              week &gt; 0)
+            </span>
+          )}
         </p>
       )}
 
       <div className="card overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
+          <table
+            className="w-full text-sm"
+            style={{ minWidth: Math.max(960, tableMinWidth) }}
+          >
             <thead className="bg-bg/50 text-xs uppercase text-muted">
-              <tr>
-                <th className="px-3 py-2 text-left">Player</th>
-                <th className="px-3 py-2 text-left">#</th>
-                <th className="px-3 py-2 text-left">Pos</th>
-                <th className="px-3 py-2 text-left">Team</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Profile</th>
-                <th className="px-3 py-2 text-left">Weekly stats</th>
-              </tr>
+              {includeStats && statKeys.length > 0 ? (
+                <>
+                  <tr>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Player
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      #
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Pos
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Team
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Status
+                    </th>
+                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                      Profile
+                    </th>
+                    <th
+                      colSpan={statKeys.length}
+                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                    >
+                      Latest week
+                    </th>
+                    <th
+                      colSpan={statKeys.length}
+                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                    >
+                      {aggSeasonShown} season
+                    </th>
+                    <th
+                      colSpan={statKeys.length}
+                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                    >
+                      {aggSeasonShown} / wk avg
+                    </th>
+                  </tr>
+                  <tr>
+                    {statKeys.map((k) => (
+                      <th
+                        key={`h-w-${k}`}
+                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                      >
+                        {k}
+                      </th>
+                    ))}
+                    {statKeys.map((k) => (
+                      <th
+                        key={`h-s-${k}`}
+                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                      >
+                        {k}
+                      </th>
+                    ))}
+                    {statKeys.map((k) => (
+                      <th
+                        key={`h-a-${k}`}
+                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                      >
+                        {k}
+                      </th>
+                    ))}
+                  </tr>
+                </>
+              ) : (
+                <tr>
+                  <th className="px-3 py-2 text-left">Player</th>
+                  <th className="px-3 py-2 text-left">#</th>
+                  <th className="px-3 py-2 text-left">Pos</th>
+                  <th className="px-3 py-2 text-left">Team</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Profile</th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {(league.isLoading || (league.isSuccess && players.isLoading)) && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                  <td
+                    colSpan={tableColSpan}
+                    className="px-3 py-6 text-center text-muted"
+                  >
                     Loading players…
                   </td>
                 </tr>
               )}
               {players.isError && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-red-300">
+                  <td
+                    colSpan={tableColSpan}
+                    className="px-3 py-6 text-center text-red-300"
+                  >
                     {players.error instanceof ApiError
                       ? `Could not load players (${players.error.status}). ${players.error.message}`
                       : "Could not load players. Check that the API is running and you are signed in."}
@@ -221,48 +310,80 @@ export default function PlayersPage() {
                 </tr>
               )}
               {players.isSuccess &&
-                players.data?.players.map((p) => (
-                  <tr key={p.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium">
-                      {p.full_name?.trim() || "—"}
-                    </td>
-                    <td className="px-3 py-2 text-muted">
-                      {p.jersey_number != null ? p.jersey_number : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-muted">{p.position ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted">{p.nfl_team ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted">
-                      {p.injury_status ? (
-                        <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300">
-                          {p.injury_status}
-                        </span>
-                      ) : (
-                        p.status ?? "—"
-                      )}
-                    </td>
-                    <td
-                      className="max-w-[220px] truncate px-3 py-2 text-xs text-muted"
-                      title={formatProfileBrief(p)}
-                    >
-                      {formatProfileBrief(p)}
-                    </td>
-                    <td
-                      className="max-w-[280px] truncate px-3 py-2 font-mono text-xs text-muted"
-                      title={summarizeWeeklyStats(
-                        p.weekly_stats as Record<string, unknown>,
-                      )}
-                    >
-                      {includeStats
-                        ? summarizeWeeklyStats(
-                            p.weekly_stats as Record<string, unknown>,
-                          )
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
+                players.data?.players.map((p) => {
+                  const wk = p.weekly_stats as Record<string, unknown> | null;
+                  const ytd = p.season_totals;
+                  const avg = p.season_weekly_avg;
+                  return (
+                    <tr key={p.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">
+                        {p.full_name?.trim() || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-muted">
+                        {p.jersey_number != null ? p.jersey_number : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-muted">{p.position ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted">{p.nfl_team ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted">
+                        {p.injury_status ? (
+                          <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300">
+                            {p.injury_status}
+                          </span>
+                        ) : (
+                          p.status ?? "—"
+                        )}
+                      </td>
+                      <td
+                        className="max-w-[220px] truncate px-3 py-2 text-xs text-muted"
+                        title={formatProfileBrief(p)}
+                      >
+                        {formatProfileBrief(p)}
+                      </td>
+                      {includeStats && statKeys.length > 0
+                        ? statKeys.map((k) => (
+                            <td
+                              key={`${p.id}-w-${k}`}
+                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                            >
+                              {statCell(wk, k)}
+                            </td>
+                          ))
+                        : null}
+                      {includeStats && statKeys.length > 0
+                        ? statKeys.map((k) => (
+                            <td
+                              key={`${p.id}-s-${k}`}
+                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                            >
+                              {statCell(
+                                ytd as Record<string, unknown> | null | undefined,
+                                k,
+                              )}
+                            </td>
+                          ))
+                        : null}
+                      {includeStats && statKeys.length > 0
+                        ? statKeys.map((k) => (
+                            <td
+                              key={`${p.id}-a-${k}`}
+                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                            >
+                              {statCell(
+                                avg as Record<string, unknown> | null | undefined,
+                                k,
+                              )}
+                            </td>
+                          ))
+                        : null}
+                    </tr>
+                  );
+                })}
               {players.isSuccess && players.data?.players.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                  <td
+                    colSpan={tableColSpan}
+                    className="px-3 py-6 text-center text-muted"
+                  >
                     <p>
                       No players match these filters for{" "}
                       <span className="font-mono text-fg">{sport}</span>.

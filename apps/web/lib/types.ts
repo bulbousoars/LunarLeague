@@ -73,6 +73,9 @@ export type Player = {
   stats_season?: number | null;
   stats_week?: number | null;
   weekly_stats?: Record<string, unknown> | null;
+  season_totals?: Record<string, number> | null;
+  season_weeks?: number | null;
+  season_weekly_avg?: Record<string, number> | null;
 };
 
 export type PlayersListResponse = {
@@ -80,6 +83,10 @@ export type PlayersListResponse = {
   total: number;
   limit: number;
   offset: number;
+  stat_columns?: string[];
+  aggregate_season?: number;
+  current_stats_season?: number | null;
+  current_stats_week?: number | null;
 };
 
 export type RosterEntry = {

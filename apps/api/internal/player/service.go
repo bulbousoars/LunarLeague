@@ -15,6 +15,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -38,10 +39,14 @@ func (s *Service) Mount(r chi.Router) {
 }
 
 type listResp struct {
-	Players []player `json:"players"`
-	Total   int      `json:"total"`
-	Limit   int      `json:"limit"`
-	Offset  int      `json:"offset"`
+	Players              []player `json:"players"`
+	Total                int      `json:"total"`
+	Limit                int      `json:"limit"`
+	Offset               int      `json:"offset"`
+	StatColumns          []string `json:"stat_columns,omitempty"`
+	AggregateSeason      int      `json:"aggregate_season,omitempty"`
+	CurrentStatsSeason   *int     `json:"current_stats_season,omitempty"`
+	CurrentStatsWeek     *int     `json:"current_stats_week,omitempty"`
 }
 
 type player struct {
@@ -62,6 +67,9 @@ type player struct {
 	StatsSeason       *int             `json:"stats_season,omitempty"`
 	StatsWeek         *int             `json:"stats_week,omitempty"`
 	WeeklyStats       json.RawMessage  `json:"weekly_stats,omitempty"`
+	SeasonTotals      map[string]float64 `json:"season_totals,omitempty"`
+	SeasonWeeks       int              `json:"season_weeks,omitempty"`
+	SeasonWeeklyAvg   map[string]float64 `json:"season_weekly_avg,omitempty"`
 }
 
 func queryBool(q string) bool {
@@ -237,7 +245,42 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, p)
 	}
-	httpx.WriteJSON(w, http.StatusOK, listResp{Players: out, Total: total, Limit: limit, Offset: offset})
+
+	resp := listResp{Players: out, Total: total, Limit: limit, Offset: offset}
+	if includeStats {
+		resp.StatColumns = scoring.DisplayStatKeys(sport)
+		aggSeason := 2025
+		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
+			aggSeason = v
+		}
+		resp.AggregateSeason = aggSeason
+		if statsResolved {
+			ss := statsSeason
+			sw := statsWeek
+			resp.CurrentStatsSeason = &ss
+			resp.CurrentStatsWeek = &sw
+		}
+		if len(out) > 0 {
+			ids := make([]string, len(out))
+			for i := range out {
+				ids[i] = out[i].ID
+			}
+			aggs, err := aggregateSeasonPlayerStats(r.Context(), s.pool, sport, aggSeason, ids)
+			if err != nil {
+				httpx.WriteError(w, http.StatusInternalServerError, err)
+				return
+			}
+			for i := range out {
+				if a, ok := aggs[out[i].ID]; ok && a.Weeks > 0 {
+					out[i].SeasonTotals = a.Totals
+					out[i].SeasonWeeks = a.Weeks
+					out[i].SeasonWeeklyAvg = a.Avg
+				}
+			}
+		}
+		resp.Players = out
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {

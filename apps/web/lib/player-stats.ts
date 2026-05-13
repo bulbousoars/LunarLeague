@@ -14,6 +14,30 @@ export function summarizeWeeklyStats(
     .join(" ");
 }
 
+export function formatStatNumber(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n - Math.round(n)) < 1e-6) return String(Math.round(n));
+  return n.toFixed(2);
+}
+
+/** Read a numeric stat from a provider JSON map (Sleeper keys, etc.). */
+export function statCell(
+  raw: Record<string, unknown> | null | undefined,
+  key: string,
+): string {
+  if (!raw || typeof raw !== "object") return "—";
+  const v = raw[key];
+  if (typeof v === "number" && Number.isFinite(v)) {
+    if (v === 0) return "0";
+    return formatStatNumber(v);
+  }
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return formatStatNumber(n);
+  }
+  return "—";
+}
+
 export function formatProfileBrief(p: {
   age?: number | null;
   height_inches?: number | null;
