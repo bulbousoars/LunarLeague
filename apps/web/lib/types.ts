@@ -64,6 +64,22 @@ export type Player = {
   status: string | null;
   injury_status: string | null;
   headshot_url: string | null;
+  jersey_number?: number | null;
+  age?: number | null;
+  height_inches?: number | null;
+  weight_lbs?: number | null;
+  college?: string | null;
+  years_exp?: number | null;
+  stats_season?: number | null;
+  stats_week?: number | null;
+  weekly_stats?: Record<string, unknown> | null;
+};
+
+export type PlayersListResponse = {
+  players: Player[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type RosterEntry = {

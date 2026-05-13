@@ -3,6 +3,7 @@ package player
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,17 +40,33 @@ func (s *Service) Mount(r chi.Router) {
 type listResp struct {
 	Players []player `json:"players"`
 	Total   int      `json:"total"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
 }
 
 type player struct {
-	ID                string   `json:"id"`
-	FullName          string   `json:"full_name"`
-	Position          *string  `json:"position"`
-	EligiblePositions []string `json:"eligible_positions"`
-	NFLTeam           *string  `json:"nfl_team"`
-	Status            *string  `json:"status"`
-	InjuryStatus      *string  `json:"injury_status"`
-	HeadshotURL       *string  `json:"headshot_url"`
+	ID                string           `json:"id"`
+	FullName          string           `json:"full_name"`
+	Position          *string          `json:"position"`
+	EligiblePositions []string         `json:"eligible_positions"`
+	NFLTeam           *string          `json:"nfl_team"`
+	Status            *string          `json:"status"`
+	InjuryStatus      *string          `json:"injury_status"`
+	HeadshotURL       *string          `json:"headshot_url"`
+	JerseyNumber      *int             `json:"jersey_number,omitempty"`
+	Age               *int             `json:"age,omitempty"`
+	HeightInches      *int             `json:"height_inches,omitempty"`
+	WeightLbs         *int             `json:"weight_lbs,omitempty"`
+	College           *string          `json:"college,omitempty"`
+	YearsExp          *int             `json:"years_exp,omitempty"`
+	StatsSeason       *int             `json:"stats_season,omitempty"`
+	StatsWeek         *int             `json:"stats_week,omitempty"`
+	WeeklyStats       json.RawMessage  `json:"weekly_stats,omitempty"`
+}
+
+func queryBool(q string) bool {
+	v := strings.TrimSpace(strings.ToLower(q))
+	return v == "1" || v == "true" || v == "yes"
 }
 
 func (s *Service) list(w http.ResponseWriter, r *http.Request) {
@@ -61,8 +78,11 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	pos := q.Get("position")
 	team := q.Get("team")
 	search := q.Get("q")
+	hasTeam := queryBool(q.Get("has_team"))
+	includeStats := queryBool(q.Get("include_stats"))
+
 	limit := 50
-	if v, _ := strconv.Atoi(q.Get("limit")); v > 0 && v <= 200 {
+	if v, _ := strconv.Atoi(q.Get("limit")); v > 0 && v <= 500 {
 		limit = v
 	}
 	offset := 0
@@ -89,22 +109,78 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		args = append(args, pat)
 		idx++
 	}
-	args = append(args, limit, offset)
+	if hasTeam {
+		conds = append(conds, `p.nfl_team IS NOT NULL AND btrim(p.nfl_team) <> '' AND lower(btrim(p.nfl_team)) NOT IN ('fa','n/a','--')`)
+	}
+	whereSQL := strings.Join(conds, " AND ")
+
+	var total int
+	countSQL := fmt.Sprintf(`SELECT count(*)::int FROM players p JOIN sports sp ON sp.id = p.sport_id WHERE %s`, whereSQL)
+	if err := s.pool.QueryRow(r.Context(), countSQL, args...).Scan(&total); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	filterArgs := append([]any{}, args...)
+	idxAfter := idx
+	statsJoin := ""
+	statsSelect := `, NULL::int, NULL::int, '{}'::jsonb`
+	statsSeason, statsWeek := 0, 0
+	statsResolved := false
+	if includeStats {
+		if qs, err := strconv.Atoi(q.Get("season")); err == nil && qs > 0 {
+			if qw, err := strconv.Atoi(q.Get("week")); err == nil && qw >= 0 {
+				statsSeason, statsWeek = qs, qw
+				statsResolved = true
+			}
+		}
+		if !statsResolved {
+			err := s.pool.QueryRow(r.Context(), `
+				SELECT ps.season, ps.week
+				FROM player_stats ps
+				JOIN sports sp2 ON sp2.id = ps.sport_id
+				WHERE sp2.code = $1
+				ORDER BY ps.season DESC, ps.week DESC
+				LIMIT 1`, sport).Scan(&statsSeason, &statsWeek)
+			if err == nil {
+				statsResolved = true
+			}
+		}
+		if statsResolved {
+			statsJoin = fmt.Sprintf(`
+				LEFT JOIN player_stats ps ON ps.player_id = p.id AND ps.sport_id = p.sport_id
+					AND ps.season = $%d AND ps.week = $%d`, idxAfter, idxAfter+1)
+			filterArgs = append(filterArgs, statsSeason, statsWeek)
+			idxAfter += 2
+			statsSelect = `, ps.season, ps.week, COALESCE(ps.stats, '{}'::jsonb)`
+		}
+	}
+
+	limitArg := idxAfter
+	offsetArg := idxAfter + 1
+	dataArgs := append(filterArgs, limit, offset)
+
+	selectCols := fmt.Sprintf(`p.id, %s, p.position, p.eligible_positions, p.nfl_team,
+		p.status, p.injury_status, p.headshot_url,
+		p.jersey_number, p.age, p.height_inches, p.weight_lbs, p.college, p.years_exp%s`,
+		DisplayNameP, statsSelect)
 
 	query := fmt.Sprintf(`
-		SELECT p.id, %s, p.position, p.eligible_positions, p.nfl_team,
-		       p.status, p.injury_status, p.headshot_url
-		FROM players p JOIN sports sp ON sp.id = p.sport_id
+		SELECT %s
+		FROM players p
+		JOIN sports sp ON sp.id = p.sport_id
+		%s
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d`,
+		selectCols,
+		statsJoin,
+		whereSQL,
 		DisplayNameP,
-		strings.Join(conds, " AND "),
-		DisplayNameP,
-		idx,
-		idx+1)
+		limitArg,
+		offsetArg)
 
-	rows, err := s.pool.Query(r.Context(), query, args...)
+	rows, err := s.pool.Query(r.Context(), query, dataArgs...)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -113,28 +189,180 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	out := []player{}
 	for rows.Next() {
 		var p player
+		var jn, ag, hi, wl, ye sql.NullInt64
+		var col sql.NullString
+		var ss, sw sql.NullInt64
+		var statsBlob []byte
 		if err := rows.Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions,
-			&p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL); err != nil {
+			&p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL,
+			&jn, &ag, &hi, &wl, &col, &ye,
+			&ss, &sw, &statsBlob); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
+		if jn.Valid {
+			v := int(jn.Int64)
+			p.JerseyNumber = &v
+		}
+		if ag.Valid {
+			v := int(ag.Int64)
+			p.Age = &v
+		}
+		if hi.Valid {
+			v := int(hi.Int64)
+			p.HeightInches = &v
+		}
+		if wl.Valid {
+			v := int(wl.Int64)
+			p.WeightLbs = &v
+		}
+		if col.Valid && strings.TrimSpace(col.String) != "" {
+			c := strings.TrimSpace(col.String)
+			p.College = &c
+		}
+		if ye.Valid {
+			v := int(ye.Int64)
+			p.YearsExp = &v
+		}
+		if ss.Valid {
+			v := int(ss.Int64)
+			p.StatsSeason = &v
+		}
+		if sw.Valid {
+			v := int(sw.Int64)
+			p.StatsWeek = &v
+		}
+		if len(statsBlob) > 2 && string(statsBlob) != "null" && string(statsBlob) != "{}" {
+			p.WeeklyStats = json.RawMessage(statsBlob)
+		}
 		out = append(out, p)
 	}
-	httpx.WriteJSON(w, http.StatusOK, listResp{Players: out, Total: len(out)})
+	httpx.WriteJSON(w, http.StatusOK, listResp{Players: out, Total: total, Limit: limit, Offset: offset})
 }
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "playerID")
+	q := r.URL.Query()
+	includeStats := queryBool(q.Get("include_stats"))
+
+	if !includeStats {
+		var p player
+		var jn, ag, hi, wl, ye sql.NullInt64
+		var col sql.NullString
+		err := s.pool.QueryRow(r.Context(), fmt.Sprintf(`
+			SELECT id, %s, position, eligible_positions, nfl_team, status, injury_status, headshot_url,
+				jersey_number, age, height_inches, weight_lbs, college, years_exp
+			FROM players WHERE id = $1`, DisplayNameBare), id).
+			Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions, &p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL,
+				&jn, &ag, &hi, &wl, &col, &ye)
+		if err != nil {
+			httpx.WriteError(w, http.StatusNotFound, err)
+			return
+		}
+		fillProfileInts(&p, jn, ag, hi, wl, ye, col)
+		httpx.WriteJSON(w, http.StatusOK, p)
+		return
+	}
+
+	statsSeason, statsWeek := 0, 0
+	statsResolved := false
+	if qs, err := strconv.Atoi(q.Get("season")); err == nil && qs > 0 {
+		if qw, err := strconv.Atoi(q.Get("week")); err == nil && qw >= 0 {
+			statsSeason, statsWeek = qs, qw
+			statsResolved = true
+		}
+	}
+	if !statsResolved {
+		err := s.pool.QueryRow(r.Context(), `
+			SELECT ps.season, ps.week
+			FROM player_stats ps
+			JOIN players p0 ON p0.id = ps.player_id
+			JOIN sports sp2 ON sp2.id = p0.sport_id
+			WHERE p0.id = $1
+			ORDER BY ps.season DESC, ps.week DESC
+			LIMIT 1`, id).Scan(&statsSeason, &statsWeek)
+		if err == nil {
+			statsResolved = true
+		}
+	}
+
 	var p player
+	var jn, ag, hi, wl, ye sql.NullInt64
+	var col sql.NullString
+	var ss, sw sql.NullInt64
+	var statsBlob []byte
+
+	if !statsResolved {
+		err := s.pool.QueryRow(r.Context(), fmt.Sprintf(`
+			SELECT p.id, %s, p.position, p.eligible_positions, p.nfl_team, p.status, p.injury_status, p.headshot_url,
+				p.jersey_number, p.age, p.height_inches, p.weight_lbs, p.college, p.years_exp,
+				NULL::int, NULL::int, '{}'::jsonb
+			FROM players p WHERE p.id = $1`, DisplayNameP), id).
+			Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions, &p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL,
+				&jn, &ag, &hi, &wl, &col, &ye, &ss, &sw, &statsBlob)
+		if err != nil {
+			httpx.WriteError(w, http.StatusNotFound, err)
+			return
+		}
+		fillProfileInts(&p, jn, ag, hi, wl, ye, col)
+		httpx.WriteJSON(w, http.StatusOK, p)
+		return
+	}
+
 	err := s.pool.QueryRow(r.Context(), fmt.Sprintf(`
-		SELECT id, %s, position, eligible_positions, nfl_team, status, injury_status, headshot_url
-		FROM players WHERE id = $1`, DisplayNameBare), id).
-		Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions, &p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL)
+		SELECT p.id, %s, p.position, p.eligible_positions, p.nfl_team, p.status, p.injury_status, p.headshot_url,
+			p.jersey_number, p.age, p.height_inches, p.weight_lbs, p.college, p.years_exp,
+			ps.season, ps.week, COALESCE(ps.stats, '{}'::jsonb)
+		FROM players p
+		LEFT JOIN player_stats ps ON ps.player_id = p.id AND ps.sport_id = p.sport_id
+			AND ps.season = $2 AND ps.week = $3
+		WHERE p.id = $1`, DisplayNameP), id, statsSeason, statsWeek).
+		Scan(&p.ID, &p.FullName, &p.Position, &p.EligiblePositions, &p.NFLTeam, &p.Status, &p.InjuryStatus, &p.HeadshotURL,
+			&jn, &ag, &hi, &wl, &col, &ye, &ss, &sw, &statsBlob)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return
 	}
+	fillProfileInts(&p, jn, ag, hi, wl, ye, col)
+	if ss.Valid {
+		v := int(ss.Int64)
+		p.StatsSeason = &v
+	}
+	if sw.Valid {
+		v := int(sw.Int64)
+		p.StatsWeek = &v
+	}
+	if len(statsBlob) > 2 && string(statsBlob) != "null" && string(statsBlob) != "{}" {
+		p.WeeklyStats = json.RawMessage(statsBlob)
+	}
 	httpx.WriteJSON(w, http.StatusOK, p)
+}
+
+func fillProfileInts(p *player, jn, ag, hi, wl, ye sql.NullInt64, col sql.NullString) {
+	if jn.Valid {
+		v := int(jn.Int64)
+		p.JerseyNumber = &v
+	}
+	if ag.Valid {
+		v := int(ag.Int64)
+		p.Age = &v
+	}
+	if hi.Valid {
+		v := int(hi.Int64)
+		p.HeightInches = &v
+	}
+	if wl.Valid {
+		v := int(wl.Int64)
+		p.WeightLbs = &v
+	}
+	if col.Valid && strings.TrimSpace(col.String) != "" {
+		c := strings.TrimSpace(col.String)
+		p.College = &c
+	}
+	if ye.Valid {
+		v := int(ye.Int64)
+		p.YearsExp = &v
+	}
 }
 
 func (s *Service) trending(w http.ResponseWriter, r *http.Request) {
