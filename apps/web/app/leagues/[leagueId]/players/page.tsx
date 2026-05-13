@@ -20,6 +20,33 @@ const PAGE_SIZE = 100;
 /** Season summed for YTD + per-week avg columns (`player_stats`, week &gt; 0). */
 const AGGREGATE_STATS_SEASON = 2025;
 
+/** Sticky first column — must use opaque bg + border-separate on table for clean scroll. */
+const stickyPlayerTh =
+  "sticky left-0 z-30 min-w-[10.5rem] max-w-[13rem] whitespace-normal bg-card " +
+  "border-r border-border shadow-[6px_0_14px_-6px_rgba(0,0,0,0.55)]";
+const stickyPlayerTd =
+  "sticky left-0 z-20 min-w-[10.5rem] max-w-[13rem] whitespace-normal bg-card " +
+  "border-r border-border shadow-[6px_0_14px_-6px_rgba(0,0,0,0.55)] align-middle";
+const bioTh =
+  "px-2.5 py-2.5 text-left align-bottom text-[11px] font-semibold uppercase tracking-wide text-muted";
+const bioTd =
+  "px-2.5 py-2.5 align-middle text-[13px] tabular-nums text-muted/95 leading-snug";
+const bioTextTd =
+  "px-2.5 py-2.5 align-middle text-[13px] leading-snug text-muted/95 max-w-[9rem] truncate";
+const statGroupHeader =
+  "border-l border-border/90 bg-bg/40 px-2 py-2 text-center text-[12px] font-semibold normal-case tracking-normal text-fg";
+const statKeyTh =
+  "border-l border-border/80 bg-bg/35 px-2 py-1.5 text-right font-mono text-[11px] font-medium normal-case tracking-normal text-muted";
+const statBandTdClass = (band: "wk" | "ytd" | "avg") => {
+  const bandBg =
+    band === "wk"
+      ? "bg-sky-500/[0.07]"
+      : band === "ytd"
+        ? "bg-violet-500/[0.07]"
+        : "bg-amber-500/[0.07]";
+  return `border-l border-border/80 px-2 py-1.5 text-right font-mono text-[12px] tabular-nums text-muted/95 min-w-[3.25rem] ${bandBg}`;
+};
+
 export default function PlayersPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const [search, setSearch] = useState("");
@@ -344,69 +371,69 @@ export default function PlayersPage() {
       )}
 
       <div className="card overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overscroll-x-contain">
           <table
-            className="w-full text-sm"
+            className="w-full border-separate border-spacing-0 text-[13px] leading-snug"
             style={{ minWidth: Math.max(960, tableMinWidth) }}
           >
-            <thead className="bg-bg/50 text-xs uppercase text-muted">
+            <thead className="bg-bg/60 text-muted backdrop-blur-sm [&_th]:align-middle">
               {includeStats && statKeys.length > 0 ? (
                 <>
                   <tr>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${stickyPlayerTh} ${bioTh}`}>
                       Player
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       #
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Pos
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Elig
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Team
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Status
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Inj
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Age
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Ht
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Wt
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       Exp
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       College
                     </th>
-                    <th rowSpan={2} className="px-3 py-2 text-left align-bottom">
+                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
                       GP
                     </th>
                     <th
                       colSpan={statKeys.length}
-                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                      className={`${statGroupHeader} border-l-sky-500/25`}
                     >
                       Latest week
                     </th>
                     <th
                       colSpan={statKeys.length}
-                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                      className={`${statGroupHeader} border-l-violet-500/25`}
                     >
                       {aggSeasonShown} season
                     </th>
                     <th
                       colSpan={statKeys.length}
-                      className="border-l border-border px-2 py-2 text-center text-fg normal-case"
+                      className={`${statGroupHeader} border-l-amber-500/25`}
                     >
                       {aggSeasonShown} / wk avg
                     </th>
@@ -415,7 +442,8 @@ export default function PlayersPage() {
                     {statKeys.map((k) => (
                       <th
                         key={`h-w-${k}`}
-                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                        title={k}
+                        className={`${statKeyTh} min-w-[3.25rem] border-l-sky-500/20 bg-sky-500/[0.08]`}
                       >
                         {k}
                       </th>
@@ -423,7 +451,8 @@ export default function PlayersPage() {
                     {statKeys.map((k) => (
                       <th
                         key={`h-s-${k}`}
-                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                        title={k}
+                        className={`${statKeyTh} min-w-[3.25rem] border-l-violet-500/20 bg-violet-500/[0.08]`}
                       >
                         {k}
                       </th>
@@ -431,7 +460,8 @@ export default function PlayersPage() {
                     {statKeys.map((k) => (
                       <th
                         key={`h-a-${k}`}
-                        className="border-l border-border px-1.5 py-1 text-left font-mono text-[10px] font-normal normal-case tracking-normal text-muted"
+                        title={k}
+                        className={`${statKeyTh} min-w-[3.25rem] border-l-amber-500/20 bg-amber-500/[0.08]`}
                       >
                         {k}
                       </th>
@@ -440,20 +470,20 @@ export default function PlayersPage() {
                 </>
               ) : (
                 <tr>
-                  <th className="px-3 py-2 text-left">Player</th>
-                  <th className="px-3 py-2 text-left">#</th>
-                  <th className="px-3 py-2 text-left">Pos</th>
-                  <th className="px-3 py-2 text-left">Elig</th>
-                  <th className="px-3 py-2 text-left">Team</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Inj</th>
-                  <th className="px-3 py-2 text-left">Age</th>
-                  <th className="px-3 py-2 text-left">Ht</th>
-                  <th className="px-3 py-2 text-left">Wt</th>
-                  <th className="px-3 py-2 text-left">Exp</th>
-                  <th className="px-3 py-2 text-left">College</th>
+                  <th className={`${stickyPlayerTh} ${bioTh}`}>Player</th>
+                  <th className={`${bioTh} bg-bg/60`}>#</th>
+                  <th className={`${bioTh} bg-bg/60`}>Pos</th>
+                  <th className={`${bioTh} bg-bg/60`}>Elig</th>
+                  <th className={`${bioTh} bg-bg/60`}>Team</th>
+                  <th className={`${bioTh} bg-bg/60`}>Status</th>
+                  <th className={`${bioTh} bg-bg/60`}>Inj</th>
+                  <th className={`${bioTh} bg-bg/60`}>Age</th>
+                  <th className={`${bioTh} bg-bg/60`}>Ht</th>
+                  <th className={`${bioTh} bg-bg/60`}>Wt</th>
+                  <th className={`${bioTh} bg-bg/60`}>Exp</th>
+                  <th className={`${bioTh} bg-bg/60`}>College</th>
                   {includeStats && (
-                    <th className="px-3 py-2 text-left">GP</th>
+                    <th className={`${bioTh} bg-bg/60`}>GP</th>
                   )}
                 </tr>
               )}
@@ -487,16 +517,23 @@ export default function PlayersPage() {
                   const ytd = p.season_totals;
                   const avg = p.season_weekly_avg;
                   return (
-                    <tr key={p.id} className="border-t border-border">
-                      <td className="px-3 py-2 font-medium">
+                    <tr
+                      key={p.id}
+                      className="border-t border-border/90 transition-colors hover:bg-bg/[0.06]"
+                    >
+                      <td
+                        className={`${stickyPlayerTd} bg-card py-2.5 pl-3 pr-2 font-medium text-fg`}
+                      >
                         {p.full_name?.trim() || "—"}
                       </td>
-                      <td className="px-3 py-2 text-muted">
+                      <td className={`${bioTd} bg-card text-left`}>
                         {p.jersey_number != null ? p.jersey_number : "—"}
                       </td>
-                      <td className="px-3 py-2 text-muted">{p.position ?? "—"}</td>
+                      <td className={`${bioTd} bg-card text-left font-medium text-fg/90`}>
+                        {p.position ?? "—"}
+                      </td>
                       <td
-                        className="max-w-[140px] truncate px-3 py-2 text-xs text-muted"
+                        className={`${bioTextTd} bg-card max-w-[8.5rem]`}
                         title={
                           p.eligible_positions?.length
                             ? p.eligible_positions.join(", ")
@@ -507,41 +544,43 @@ export default function PlayersPage() {
                           ? p.eligible_positions.join(", ")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 text-muted">{p.nfl_team ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted">
+                      <td className={`${bioTd} bg-card text-left font-medium tracking-wide`}>
+                        {p.nfl_team ?? "—"}
+                      </td>
+                      <td className={`${bioTd} bg-card text-left`}>
                         {p.status?.trim() || "—"}
                       </td>
-                      <td className="px-3 py-2 text-muted">
+                      <td className={`${bioTd} bg-card text-left`}>
                         {p.injury_status?.trim() ? (
-                          <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300">
+                          <span className="inline-block max-w-[6.5rem] truncate rounded-md bg-red-500/15 px-2 py-0.5 text-[12px] font-medium text-red-200/95">
                             {p.injury_status}
                           </span>
                         ) : (
-                          "—"
+                          <span className="text-muted/60">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-muted">
+                      <td className={`${bioTd} bg-card text-right`}>
                         {p.age != null && p.age > 0 ? p.age : "—"}
                       </td>
-                      <td className="px-3 py-2 font-mono text-muted">
+                      <td className={`${bioTd} bg-card text-left font-mono text-[12px]`}>
                         {formatHeightInches(p.height_inches)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-muted">
+                      <td className={`${bioTd} bg-card text-right`}>
                         {p.weight_lbs != null && p.weight_lbs > 0
                           ? p.weight_lbs
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-muted">
+                      <td className={`${bioTd} bg-card text-right`}>
                         {p.years_exp != null && p.years_exp >= 0 ? p.years_exp : "—"}
                       </td>
                       <td
-                        className="max-w-[160px] truncate px-3 py-2 text-xs text-muted"
+                        className={`${bioTextTd} bg-card max-w-[10rem]`}
                         title={p.college?.trim() || undefined}
                       >
                         {p.college?.trim() || "—"}
                       </td>
                       {includeStats && (
-                        <td className="px-3 py-2 text-right font-mono text-muted">
+                        <td className={`${bioTd} bg-card text-right font-mono text-[12px]`}>
                           {p.season_weeks != null && p.season_weeks > 0
                             ? p.season_weeks
                             : "—"}
@@ -551,7 +590,8 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-w-${k}`}
-                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                              title={`${k} (latest week)`}
+                              className={statBandTdClass("wk")}
                             >
                               {statCell(wk, k)}
                             </td>
@@ -561,7 +601,8 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-s-${k}`}
-                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                              title={`${k} (season total)`}
+                              className={statBandTdClass("ytd")}
                             >
                               {statCell(
                                 ytd as Record<string, unknown> | null | undefined,
@@ -574,7 +615,8 @@ export default function PlayersPage() {
                         ? statKeys.map((k) => (
                             <td
                               key={`${p.id}-a-${k}`}
-                              className="border-l border-border px-1.5 py-2 text-right font-mono text-xs text-muted"
+                              title={`${k} (per-week avg)`}
+                              className={statBandTdClass("avg")}
                             >
                               {statCell(
                                 avg as Record<string, unknown> | null | undefined,
