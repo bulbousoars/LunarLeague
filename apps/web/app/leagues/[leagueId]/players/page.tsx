@@ -10,6 +10,8 @@ import { positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
 
 const PAGE_SIZE = 100;
+/** Season summed for YTD + per-week avg columns (`player_stats`, week &gt; 0). */
+const AGGREGATE_STATS_SEASON = 2025;
 
 export default function PlayersPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -43,7 +45,7 @@ export default function PlayersPage() {
     if (onlyWithTeam) q.set("has_team", "1");
     if (includeStats) {
       q.set("include_stats", "1");
-      q.set("aggregate_season", String(league.data?.season ?? 2025));
+      q.set("aggregate_season", String(AGGREGATE_STATS_SEASON));
       const ss = statsSeasonIn.trim();
       const sw = statsWeekIn.trim();
       if (ss !== "" && sw !== "") {
@@ -59,7 +61,6 @@ export default function PlayersPage() {
     position,
     onlyWithTeam,
     includeStats,
-    league.data?.season,
     statsSeasonIn,
     statsWeekIn,
   ]);
@@ -76,7 +77,7 @@ export default function PlayersPage() {
 
   const statKeys = players.data?.stat_columns ?? [];
   const aggSeasonShown =
-    players.data?.aggregate_season ?? league.data?.season ?? 2025;
+    players.data?.aggregate_season ?? AGGREGATE_STATS_SEASON;
   const statColGroup =
     includeStats && statKeys.length > 0 ? statKeys.length * 3 : 0;
   const tableColSpan = 6 + statColGroup;

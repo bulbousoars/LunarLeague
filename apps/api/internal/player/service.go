@@ -88,6 +88,13 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	search := q.Get("q")
 	hasTeam := queryBool(q.Get("has_team"))
 	includeStats := queryBool(q.Get("include_stats"))
+	// Season for YTD + per-week averages (defaults 2025; override with aggregate_season).
+	aggSeason := 2025
+	if includeStats {
+		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
+			aggSeason = v
+		}
+	}
 
 	limit := 50
 	if v, _ := strconv.Atoi(q.Get("limit")); v > 0 && v <= 500 {
@@ -147,9 +154,18 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 				SELECT ps.season, ps.week
 				FROM player_stats ps
 				JOIN sports sp2 ON sp2.id = ps.sport_id
-				WHERE sp2.code = $1
-				ORDER BY ps.season DESC, ps.week DESC
-				LIMIT 1`, sport).Scan(&statsSeason, &statsWeek)
+				WHERE sp2.code = $1 AND ps.season = $2
+				ORDER BY ps.week DESC
+				LIMIT 1`, sport, aggSeason).Scan(&statsSeason, &statsWeek)
+			if err != nil {
+				err = s.pool.QueryRow(r.Context(), `
+					SELECT ps.season, ps.week
+					FROM player_stats ps
+					JOIN sports sp2 ON sp2.id = ps.sport_id
+					WHERE sp2.code = $1
+					ORDER BY ps.season DESC, ps.week DESC
+					LIMIT 1`, sport).Scan(&statsSeason, &statsWeek)
+			}
 			if err == nil {
 				statsResolved = true
 			}
@@ -249,10 +265,6 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	resp := listResp{Players: out, Total: total, Limit: limit, Offset: offset}
 	if includeStats {
 		resp.StatColumns = scoring.DisplayStatKeys(sport)
-		aggSeason := 2025
-		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
-			aggSeason = v
-		}
 		resp.AggregateSeason = aggSeason
 		if statsResolved {
 			ss := statsSeason
