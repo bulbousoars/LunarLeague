@@ -4,7 +4,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { api, ApiError, wsURL } from "@/lib/api";
-import type { Draft, DraftPick, League, OnTheClock, Player, Team } from "@/lib/types";
+import type {
+  Draft,
+  DraftPick,
+  League,
+  OnTheClock,
+  Player,
+  PlayersListResponse,
+  Team,
+} from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
 
 export default function DraftRoomPage() {
@@ -33,7 +41,7 @@ export default function DraftRoomPage() {
   const players = useQuery({
     queryKey: ["players", "browse", sport, leagueId],
     queryFn: () =>
-      api<{ players: Player[] }>(
+      api<PlayersListResponse>(
         `/v1/players?sport=${encodeURIComponent(sport)}&limit=200`,
       ),
     enabled: league.isSuccess,

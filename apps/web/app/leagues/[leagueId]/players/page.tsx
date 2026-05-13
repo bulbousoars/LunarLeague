@@ -18,6 +18,9 @@ export default function PlayersPage() {
   const [page, setPage] = useState(1);
   const [onlyWithTeam, setOnlyWithTeam] = useState(true);
   const [includeStats, setIncludeStats] = useState(true);
+  /** Optional override for which `player_stats` row joins as “latest week”. */
+  const [statsSeasonIn, setStatsSeasonIn] = useState("");
+  const [statsWeekIn, setStatsWeekIn] = useState("");
   const { user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
 
@@ -41,6 +44,12 @@ export default function PlayersPage() {
     if (includeStats) {
       q.set("include_stats", "1");
       q.set("aggregate_season", String(league.data?.season ?? 2025));
+      const ss = statsSeasonIn.trim();
+      const sw = statsWeekIn.trim();
+      if (ss !== "" && sw !== "") {
+        q.set("season", ss);
+        q.set("week", sw);
+      }
     }
     return `/v1/players?${q.toString()}`;
   }, [
@@ -51,20 +60,12 @@ export default function PlayersPage() {
     onlyWithTeam,
     includeStats,
     league.data?.season,
+    statsSeasonIn,
+    statsWeekIn,
   ]);
 
   const players = useQuery({
-    queryKey: [
-      "players",
-      "browse",
-      sport,
-      search,
-      position,
-      leagueId,
-      page,
-      onlyWithTeam,
-      includeStats,
-    ],
+    queryKey: ["players", "browse", playersUrl, leagueId],
     queryFn: () => api<PlayersListResponse>(playersUrl),
     enabled: league.isSuccess,
     retry: 2,
@@ -178,6 +179,45 @@ export default function PlayersPage() {
           />
           Load stat columns (latest week + season totals + per-week avg)
         </label>
+        {includeStats && (
+          <div className="flex w-full basis-full flex-wrap items-center gap-2 text-sm text-muted">
+            <span className="whitespace-nowrap">Stat window override</span>
+            <input
+              className="input w-24 font-mono"
+              inputMode="numeric"
+              placeholder="Season"
+              value={statsSeasonIn}
+              disabled={!league.isSuccess}
+              onChange={(e) => {
+                setStatsSeasonIn(e.target.value);
+                setPage(1);
+              }}
+            />
+            <input
+              className="input w-20 font-mono"
+              inputMode="numeric"
+              placeholder="Week"
+              value={statsWeekIn}
+              disabled={!league.isSuccess}
+              onChange={(e) => {
+                setStatsWeekIn(e.target.value);
+                setPage(1);
+              }}
+            />
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={!league.isSuccess}
+              onClick={() => {
+                setStatsSeasonIn("");
+                setStatsWeekIn("");
+                setPage(1);
+              }}
+            >
+              Use latest in DB
+            </button>
+          </div>
+        )}
       </div>
 
       {players.isSuccess && (
@@ -189,9 +229,15 @@ export default function PlayersPage() {
           of <strong className="text-fg">{total}</strong> matching players
           {includeStats && statKeys.length > 0 && (
             <span className="ml-1">
-              · per-stat columns: latest week (S
-              {players.data?.current_stats_season ?? "—"} W
-              {players.data?.current_stats_week ?? "—"}),{" "}
+              · per-stat columns: latest week (season{" "}
+              <span className="font-mono text-fg">
+                {players.data?.current_stats_season ?? "—"}
+              </span>
+              , week{" "}
+              <span className="font-mono text-fg">
+                {players.data?.current_stats_week ?? "—"}
+              </span>
+              ),{" "}
               <span className="font-mono text-fg">{aggSeasonShown}</span> season
               totals, and per-week averages (mean over weeks with a{" "}
               <code className="rounded bg-card px-1">player_stats</code> row,

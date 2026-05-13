@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { Player } from "@/lib/types";
+import type { Player, PlayersListResponse } from "@/lib/types";
 
 // Client-side mock draft. No persistence — pure practice tool. AI bots use
 // "next best available" with a small randomization within position to mimic
@@ -21,7 +21,8 @@ export default function MockDraftPage() {
 
   const players = useQuery({
     queryKey: ["players", "nfl-mock"],
-    queryFn: () => api<{ players: Player[] }>(`/v1/players?sport=nfl&limit=400`),
+    queryFn: () =>
+      api<PlayersListResponse>(`/v1/players?sport=nfl&limit=500`),
   });
 
   const order = useMemo(() => makeSnakeOrder(teams, rounds), [teams, rounds]);
