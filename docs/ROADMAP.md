@@ -26,6 +26,7 @@ Canonical phase list for the product (the README status table mirrors this file)
 
 1. **Phase A — operator:** keep env-based `SPORTSDATAIO_API_KEY` + `DATA_PROVIDER=sportsdataio` for people comfortable editing `.env` / secrets manager (e.g. OpenBao, Docker secrets).
 2. **Phase B — product:** let **site admins** (`is_admin`) and/or **league commissioners** configure or rotate a SportsData.io (or other paid) key from the web app, stored server-side (encrypted at rest, never returned in full after save). Exact scope (global vs per-league) TBD when SDIO ships.
+3. **Discovery:** `GET /v1/meta/datasets` reports whether an env-configured SDIO key passed a live probe (`CurrentSeason` per sport); UI and workers can treat that as “supplementary dataset available” before league-level key storage exists.
 
 ## Jobs / scale
 

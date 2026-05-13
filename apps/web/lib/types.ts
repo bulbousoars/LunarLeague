@@ -89,6 +89,19 @@ export type PlayersListResponse = {
   current_stats_week?: number | null;
 };
 
+/** Public: which upstream datasets the instance exposes (see GET /v1/meta/datasets). */
+export type MetaDatasetsResponse = {
+  primary_provider: string;
+  stat_field_schema: string;
+  stats_write_policy?: string;
+  sportsdataio: {
+    api_key_configured: boolean;
+    access_verified: boolean;
+    sports: string[];
+    supplementary_dataset_available: boolean;
+  };
+};
+
 /** Distinct (season, week) rows in `player_stats` for stat-window dropdowns. */
 export type PlayerStatsWindowsResponse = {
   seasons: number[];

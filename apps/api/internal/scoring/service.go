@@ -30,6 +30,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/httpx"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/statsnorm"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -53,8 +54,15 @@ type previewReq struct {
 
 func (s *Service) preview(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "leagueID")
-	var raw []byte
+	var sportCode string
 	err := s.pool.QueryRow(r.Context(),
+		`SELECT sp.code FROM leagues l JOIN sports sp ON sp.id = l.sport_id WHERE l.id = $1`, id).Scan(&sportCode)
+	if err != nil {
+		httpx.WriteError(w, http.StatusNotFound, err)
+		return
+	}
+	var raw []byte
+	err = s.pool.QueryRow(r.Context(),
 		`SELECT rules FROM scoring_rules WHERE league_id = $1`, id).Scan(&raw)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err)
@@ -70,7 +78,8 @@ func (s *Service) preview(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	pts := Compute(rules, req.Stats)
+	norm := statsnorm.NormalizeStatMap(sportCode, "", req.Stats)
+	pts := Compute(rules, norm)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"points": pts})
 }
 
@@ -109,7 +118,8 @@ func (s *Service) PollLiveStats(ctx context.Context, dp provider.DataProvider) e
 			return err
 		}
 		for _, sl := range stats {
-			body, _ := json.Marshal(sl.Stats)
+			normalized := statsnorm.NormalizeStatMap(sportCode, eff.Name(), sl.Stats)
+			body, _ := json.Marshal(normalized)
 			_, err := s.pool.Exec(ctx, `
 				INSERT INTO player_stats (sport_id, season, week, player_id, stats, is_final)
 				SELECT $1, $2, $3, p.id, $5::jsonb, $6

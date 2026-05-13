@@ -4,6 +4,7 @@ package router
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/auth"
@@ -17,6 +18,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/notify"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/provider/sportsdataio"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/roster"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/sport"
@@ -81,6 +83,23 @@ func New(d *Deps) http.Handler {
 	})
 
 	r.Route("/v1", func(r chi.Router) {
+		r.Get("/meta/datasets", func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+			defer cancel()
+			sports, verified := sportsdataio.VerifyAccessCached(ctx, d.Cfg.SportsDataIOAPIKey)
+			httpx.WriteJSON(w, http.StatusOK, map[string]any{
+				"primary_provider":    d.Cfg.DataProvider,
+				"stat_field_schema":   "canonical_v1",
+				"stats_write_policy":  "Weekly player_stats rows are normalized to canonical_v1 keys on ingest (see internal/statsnorm).",
+				"sportsdataio": map[string]any{
+					"api_key_configured":              strings.TrimSpace(d.Cfg.SportsDataIOAPIKey) != "",
+					"access_verified":                 verified,
+					"sports":                          sports,
+					"supplementary_dataset_available": verified,
+				},
+			})
+		})
+
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(middleware.Timeout(90 * time.Second))
 			authSvc.Mount(r)

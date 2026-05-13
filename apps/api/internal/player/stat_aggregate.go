@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bulbousoars/lunarleague/apps/api/internal/db"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/statsnorm"
 )
 
 type aggRow struct {
@@ -16,7 +17,7 @@ type aggRow struct {
 	Avg    map[string]float64
 }
 
-func addJSONStats(dst map[string]float64, raw []byte) {
+func addJSONStats(dst map[string]float64, sport string, raw []byte) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return
 	}
@@ -24,12 +25,17 @@ func addJSONStats(dst map[string]float64, raw []byte) {
 	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
 		return
 	}
+	tmp := make(map[string]float64, len(m))
 	for k, v := range m {
 		f, ok := toFloatStat(v)
 		if !ok {
 			continue
 		}
-		dst[k] += f
+		tmp[k] += f
+	}
+	n := statsnorm.NormalizeStatMap(sport, "", tmp)
+	for k, v := range n {
+		dst[k] += v
 	}
 }
 
@@ -93,7 +99,7 @@ func aggregateSeasonPlayerStats(ctx context.Context, pool *db.DB, sportCode stri
 			ar = &aggRow{Totals: make(map[string]float64)}
 			out[pid] = ar
 		}
-		addJSONStats(ar.Totals, statsRaw)
+		addJSONStats(ar.Totals, sportCode, statsRaw)
 		ar.Weeks++
 	}
 

@@ -63,7 +63,7 @@ CREATE TABLE player_stats (
     week            int NOT NULL,                  -- 0 for offseason / aggregate
     player_id       uuid NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     game_id         uuid REFERENCES games(id) ON DELETE SET NULL,
-    stats           jsonb NOT NULL DEFAULT '{}',   -- e.g. {"pass_yd":312,"pass_td":2,"int":1}
+    stats           jsonb NOT NULL DEFAULT '{}',   -- canonical_v1 keys (e.g. {"pass_yd":312,"pass_td":2,"pass_int":1}); see internal/statsnorm
     is_final        boolean NOT NULL DEFAULT false,
     updated_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (sport_id, season, week, player_id)

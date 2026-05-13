@@ -6,6 +6,8 @@ Lunar League runs on a pluggable `DataProvider` interface. Pick one (or write yo
 
 **Default and recommended:** `DATA_PROVIDER=sleeper`. That path is what we develop and test against: NFL/NBA from Sleeper, MLB player sync and stats from the **MLB Stats API** helper (no extra key). Treat this as the **bare minimum Sleeper footprint** until premium feeds are fully integrated.
 
+**Canonical stat keys:** Weekly rows written to `player_stats` are normalized to **`canonical_v1`** (see `internal/statsnorm`, aligned with `scoring.DefaultRules`). Clients can read **`GET /v1/meta/datasets`** for `stat_field_schema` and provider flags.
+
 ## Sleeper (default — free)
 
 ```bash
@@ -32,6 +34,8 @@ Uses the public, unauthenticated [Sleeper API](https://docs.sleeper.com/) at `ht
 **Not production-ready.** Code lives under `apps/api/internal/provider/sportsdataio` as a starting point; wiring, coverage, and tests are incomplete. Prefer **`DATA_PROVIDER=sleeper`** until this is explicitly marked done in [ROADMAP.md](ROADMAP.md).
 
 When we ship it, keys will start as **deployment env** (`SPORTSDATAIO_API_KEY`) for operators; a follow-up is **UI for admins/commissioners** to set or rotate a league-scoped or instance-scoped key without editing server files (see roadmap).
+
+**Detection (today):** With `DATA_PROVIDER=sleeper` you may still set `SPORTSDATAIO_API_KEY` in `.env`. The API exposes **`GET /v1/meta/datasets`** (no auth): if the key returns HTTP 200 for a league’s `CurrentSeason` probe, `sportsdataio.supplementary_dataset_available` is `true` and `sports` lists which feeds (`nfl`, `nba`, `mlb`) succeeded. Downstream features (extra SDIO-backed tables, projections, etc.) can key off that flag as they land.
 
 ## MLB Stats API (free, MLB only)
 
