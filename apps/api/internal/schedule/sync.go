@@ -29,7 +29,7 @@ func SyncFromProviders(ctx context.Context, pool *db.DB, primary provider.DataPr
 		if err != nil {
 			continue
 		}
-		games, err := dp.SyncSchedule(ctx, provider.Sport{ID: sp.ID, Code: code}, seasonForSport(code, yr))
+		games, err := dp.SyncSchedule(ctx, provider.Sport{ID: sp.ID, Code: code}, SeasonForSport(code, yr))
 		if err != nil || len(games) == 0 {
 			continue
 		}
@@ -58,7 +58,9 @@ func SyncFromProviders(ctx context.Context, pool *db.DB, primary provider.DataPr
 	return nil
 }
 
-func seasonForSport(code string, calendarYear int) int {
+// SeasonForSport maps calendar time to the provider season year (e.g. NFL
+// early calendar year uses prior season).
+func SeasonForSport(code string, calendarYear int) int {
 	// Jan–Feb: NFL postseason still tags prior season in most APIs.
 	if code == "nfl" {
 		now := time.Now()

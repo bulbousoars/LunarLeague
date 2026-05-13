@@ -83,21 +83,22 @@ func (s *Service) preview(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"points": pts})
 }
 
-// PollLiveStats is invoked by the worker on a periodic tick. It pulls the
-// latest stat lines from the configured provider for every sport that has
-// games marked scheduled or in progress, then upserts player_stats.
+// PollLiveStats is invoked by the worker on a periodic tick. It pulls stat
+// lines from the provider for recent game weeks (scheduled, in progress, or
+// final) so player_stats stays filled after games complete — not only while
+// they are live.
 func (s *Service) PollLiveStats(ctx context.Context, dp provider.DataProvider) error {
 	if dp == nil {
 		return errors.New("no data provider")
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (g.sport_id, g.season, g.week)
-			g.sport_id, sp.code, g.season, g.week
+		SELECT DISTINCT g.sport_id, sp.code, g.season, g.week
 		FROM games g
 		JOIN sports sp ON sp.id = g.sport_id
-		WHERE g.status IN ('in_progress','scheduled')
-		ORDER BY g.sport_id, g.season, g.week, g.kickoff_at
-		LIMIT 32`)
+		WHERE g.status IN ('in_progress','scheduled','final')
+		  AND g.kickoff_at > NOW() - INTERVAL '800 days'
+		ORDER BY g.season DESC, g.week DESC, g.sport_id
+		LIMIT 40`)
 	if err != nil {
 		return err
 	}
@@ -117,20 +118,8 @@ func (s *Service) PollLiveStats(ctx context.Context, dp provider.DataProvider) e
 		if err != nil {
 			return err
 		}
-		for _, sl := range stats {
-			normalized := statsnorm.NormalizeStatMap(sportCode, eff.Name(), sl.Stats)
-			body, _ := json.Marshal(normalized)
-			_, err := s.pool.Exec(ctx, `
-				INSERT INTO player_stats (sport_id, season, week, player_id, stats, is_final)
-				SELECT $1, $2, $3, p.id, $5::jsonb, $6
-				FROM players p
-				WHERE p.sport_id = $1 AND p.provider_player_id = $4 AND p.provider = $7
-				ON CONFLICT (sport_id, season, week, player_id) DO UPDATE
-					SET stats = EXCLUDED.stats, is_final = EXCLUDED.is_final, updated_at = now()`,
-				sportID, season, week, sl.ProviderPlayerID, string(body), sl.IsFinal, eff.Name())
-			if err != nil {
-				return err
-			}
+		if err := s.upsertStatLines(ctx, sportID, sportCode, eff.Name(), season, week, stats); err != nil {
+			return err
 		}
 	}
 	return nil

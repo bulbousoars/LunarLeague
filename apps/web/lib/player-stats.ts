@@ -20,6 +20,21 @@ export function formatStatNumber(n: number): string {
   return n.toFixed(2);
 }
 
+/** Read a numeric stat for sorting (same rules as statCell). */
+export function statNumeric(
+  raw: Record<string, unknown> | null | undefined,
+  key: string,
+): number | null {
+  if (!raw || typeof raw !== "object") return null;
+  const v = raw[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 /** Read a numeric stat from a provider JSON map (Sleeper keys, etc.). */
 export function statCell(
   raw: Record<string, unknown> | null | undefined,

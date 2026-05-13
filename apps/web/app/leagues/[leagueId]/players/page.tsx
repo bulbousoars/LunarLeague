@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError } from "@/lib/api";
 import type {
   League,
@@ -15,6 +15,13 @@ import {
 } from "@/lib/player-stats";
 import { positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
+import {
+  PLAYER_SORT_IDS,
+  sortPlayers,
+  statColumnOptions,
+  statSortId,
+  type SortRule,
+} from "@/lib/players-table-sort";
 
 const PAGE_SIZE = 100;
 /** Season summed for YTD + per-week avg columns (`player_stats`, week &gt; 0). */
@@ -46,6 +53,91 @@ const statBandTdClass = (band: "wk" | "ytd" | "avg") => {
         : "bg-amber-500/[0.07]";
   return `border-l border-border/80 px-2 py-1.5 text-right font-mono text-[12px] tabular-nums text-muted/95 min-w-[3.25rem] ${bandBg}`;
 };
+
+function cyclePrimary(current: SortRule | null, id: string): SortRule | null {
+  if (!current || current.id !== id) return { id, dir: "asc" };
+  if (current.dir === "asc") return { id, dir: "desc" };
+  return null;
+}
+
+function sortMark(
+  primary: SortRule | null,
+  advancedActive: boolean,
+  id: string,
+): string {
+  if (advancedActive) return "";
+  if (!primary || primary.id !== id) return "";
+  return primary.dir === "asc" ? "↑" : "↓";
+}
+
+function SortThBio(props: {
+  sortId: string;
+  children: ReactNode;
+  className: string;
+  primary: SortRule | null;
+  advancedActive: boolean;
+  onCycle: () => void;
+  rowSpan?: number;
+  colSpan?: number;
+}) {
+  const mark = sortMark(props.primary, props.advancedActive, props.sortId);
+  return (
+    <th
+      rowSpan={props.rowSpan}
+      colSpan={props.colSpan}
+      className={props.className}
+    >
+      <button
+        type="button"
+        title="Sort: ascending → descending → off"
+        className="flex w-full min-w-0 items-center justify-start gap-1 text-left font-inherit"
+        onClick={props.onCycle}
+      >
+        <span className="min-w-0 flex-1">{props.children}</span>
+        {mark ? (
+          <span
+            className="shrink-0 font-mono text-[10px] text-muted"
+            aria-hidden
+          >
+            {mark}
+          </span>
+        ) : null}
+      </button>
+    </th>
+  );
+}
+
+function SortThStat(props: {
+  sortId: string;
+  label: string;
+  title: string;
+  className: string;
+  primary: SortRule | null;
+  advancedActive: boolean;
+  onCycle: () => void;
+}) {
+  const mark = sortMark(props.primary, props.advancedActive, props.sortId);
+  return (
+    <th title={props.title} className={props.className}>
+      <button
+        type="button"
+        title="Sort: ascending → descending → off"
+        className="flex w-full min-w-0 items-end justify-end gap-1 text-right font-inherit"
+        onClick={props.onCycle}
+      >
+        <span className="min-w-0 break-all text-right">{props.label}</span>
+        {mark ? (
+          <span
+            className="shrink-0 font-mono text-[10px] text-muted"
+            aria-hidden
+          >
+            {mark}
+          </span>
+        ) : null}
+      </button>
+    </th>
+  );
+}
 
 export default function PlayersPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -163,6 +255,25 @@ export default function PlayersPage() {
   const tableMinWidth = 520 + baseColCount * 44 + statColGroup * 52;
 
   const posOptions = positionsForSport(sport);
+
+  const [primarySort, setPrimarySort] = useState<SortRule | null>(null);
+  const [advancedSortRules, setAdvancedSortRules] = useState<SortRule[]>([]);
+  const advancedActive = advancedSortRules.length > 0;
+
+  const sortColumnOptions = useMemo(
+    () => statColumnOptions(includeStats ? statKeys : []),
+    [includeStats, statKeys],
+  );
+
+  const sortedPlayers = useMemo(() => {
+    const raw = players.data?.players ?? [];
+    return sortPlayers(raw, primarySort, advancedSortRules, includeStats);
+  }, [players.data?.players, primarySort, advancedSortRules, includeStats]);
+
+  const cycleColumnSort = (id: string) => {
+    setAdvancedSortRules([]);
+    setPrimarySort((prev) => cyclePrimary(prev, id));
+  };
 
   const seedSports = useMutation({
     mutationFn: () =>
@@ -364,13 +475,26 @@ export default function PlayersPage() {
               <span className="font-mono text-fg">{aggSeasonShown}</span> season
               totals, and per-week averages (mean over weeks with a{" "}
               <code className="rounded bg-card px-1">player_stats</code> row,
-              week &gt; 0)
+              week &gt; 0). If YTD or averages are blank for{" "}
+              <span className="font-mono text-fg">{aggSeasonShown}</span>, the DB
+              may not have weekly stat rows for that season yet (API workers sync
+              live and final games and run a periodic backfill after deploy).
             </span>
           )}
         </p>
       )}
 
-      <div className="card overflow-hidden p-0">
+      {players.isSuccess && advancedActive && (
+        <p className="mb-2 text-xs text-muted">
+          Advanced multi-sort is active ({advancedSortRules.length} level
+          {advancedSortRules.length === 1 ? "" : "s"}). Column header arrows are
+          hidden until you clear advanced rules or click a header (which resets
+          advanced sort).
+        </p>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start">
+        <div className="card min-w-0 overflow-hidden p-0">
         <div className="overflow-x-auto overscroll-x-contain">
           <table
             className="w-full border-separate border-spacing-0 text-[13px] leading-snug"
@@ -380,45 +504,140 @@ export default function PlayersPage() {
               {includeStats && statKeys.length > 0 ? (
                 <>
                   <tr>
-                    <th rowSpan={2} className={`${stickyPlayerTh} ${bioTh}`}>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.full_name}
+                      className={`${stickyPlayerTh} ${bioTh}`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.full_name)}
+                    >
                       Player
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.jersey_number}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() =>
+                        cycleColumnSort(PLAYER_SORT_IDS.jersey_number)
+                      }
+                    >
                       #
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.position}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.position)}
+                    >
                       Pos
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.eligible}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.eligible)}
+                    >
                       Elig
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.nfl_team}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.nfl_team)}
+                    >
                       Team
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.status}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.status)}
+                    >
                       Status
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.injury}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.injury)}
+                    >
                       Inj
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.age}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.age)}
+                    >
                       Age
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.height_inches}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() =>
+                        cycleColumnSort(PLAYER_SORT_IDS.height_inches)
+                      }
+                    >
                       Ht
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.weight_lbs}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.weight_lbs)}
+                    >
                       Wt
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.years_exp}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.years_exp)}
+                    >
                       Exp
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.college}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.college)}
+                    >
                       College
-                    </th>
-                    <th rowSpan={2} className={`${bioTh} bg-bg/60`}>
+                    </SortThBio>
+                    <SortThBio
+                      rowSpan={2}
+                      sortId={PLAYER_SORT_IDS.gp}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.gp)}
+                    >
                       GP
-                    </th>
+                    </SortThBio>
                     <th
                       colSpan={statKeys.length}
                       className={`${statGroupHeader} border-l-sky-500/25`}
@@ -440,50 +659,167 @@ export default function PlayersPage() {
                   </tr>
                   <tr>
                     {statKeys.map((k) => (
-                      <th
+                      <SortThStat
                         key={`h-w-${k}`}
+                        sortId={statSortId("wk", k)}
+                        label={k}
                         title={k}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-sky-500/20 bg-sky-500/[0.08]`}
-                      >
-                        {k}
-                      </th>
+                        primary={primarySort}
+                        advancedActive={advancedActive}
+                        onCycle={() => cycleColumnSort(statSortId("wk", k))}
+                      />
                     ))}
                     {statKeys.map((k) => (
-                      <th
+                      <SortThStat
                         key={`h-s-${k}`}
+                        sortId={statSortId("ytd", k)}
+                        label={k}
                         title={k}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-violet-500/20 bg-violet-500/[0.08]`}
-                      >
-                        {k}
-                      </th>
+                        primary={primarySort}
+                        advancedActive={advancedActive}
+                        onCycle={() => cycleColumnSort(statSortId("ytd", k))}
+                      />
                     ))}
                     {statKeys.map((k) => (
-                      <th
+                      <SortThStat
                         key={`h-a-${k}`}
+                        sortId={statSortId("avg", k)}
+                        label={k}
                         title={k}
                         className={`${statKeyTh} min-w-[3.25rem] border-l-amber-500/20 bg-amber-500/[0.08]`}
-                      >
-                        {k}
-                      </th>
+                        primary={primarySort}
+                        advancedActive={advancedActive}
+                        onCycle={() => cycleColumnSort(statSortId("avg", k))}
+                      />
                     ))}
                   </tr>
                 </>
               ) : (
                 <tr>
-                  <th className={`${stickyPlayerTh} ${bioTh}`}>Player</th>
-                  <th className={`${bioTh} bg-bg/60`}>#</th>
-                  <th className={`${bioTh} bg-bg/60`}>Pos</th>
-                  <th className={`${bioTh} bg-bg/60`}>Elig</th>
-                  <th className={`${bioTh} bg-bg/60`}>Team</th>
-                  <th className={`${bioTh} bg-bg/60`}>Status</th>
-                  <th className={`${bioTh} bg-bg/60`}>Inj</th>
-                  <th className={`${bioTh} bg-bg/60`}>Age</th>
-                  <th className={`${bioTh} bg-bg/60`}>Ht</th>
-                  <th className={`${bioTh} bg-bg/60`}>Wt</th>
-                  <th className={`${bioTh} bg-bg/60`}>Exp</th>
-                  <th className={`${bioTh} bg-bg/60`}>College</th>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.full_name}
+                    className={`${stickyPlayerTh} ${bioTh}`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.full_name)}
+                  >
+                    Player
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.jersey_number}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() =>
+                      cycleColumnSort(PLAYER_SORT_IDS.jersey_number)
+                    }
+                  >
+                    #
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.position}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.position)}
+                  >
+                    Pos
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.eligible}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.eligible)}
+                  >
+                    Elig
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.nfl_team}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.nfl_team)}
+                  >
+                    Team
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.status}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.status)}
+                  >
+                    Status
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.injury}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.injury)}
+                  >
+                    Inj
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.age}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.age)}
+                  >
+                    Age
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.height_inches}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() =>
+                      cycleColumnSort(PLAYER_SORT_IDS.height_inches)
+                    }
+                  >
+                    Ht
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.weight_lbs}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.weight_lbs)}
+                  >
+                    Wt
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.years_exp}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.years_exp)}
+                  >
+                    Exp
+                  </SortThBio>
+                  <SortThBio
+                    sortId={PLAYER_SORT_IDS.college}
+                    className={`${bioTh} bg-bg/60`}
+                    primary={primarySort}
+                    advancedActive={advancedActive}
+                    onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.college)}
+                  >
+                    College
+                  </SortThBio>
                   {includeStats && (
-                    <th className={`${bioTh} bg-bg/60`}>GP</th>
+                    <SortThBio
+                      sortId={PLAYER_SORT_IDS.gp}
+                      className={`${bioTh} bg-bg/60`}
+                      primary={primarySort}
+                      advancedActive={advancedActive}
+                      onCycle={() => cycleColumnSort(PLAYER_SORT_IDS.gp)}
+                    >
+                      GP
+                    </SortThBio>
                   )}
                 </tr>
               )}
@@ -512,7 +848,7 @@ export default function PlayersPage() {
                 </tr>
               )}
               {players.isSuccess &&
-                players.data?.players.map((p) => {
+                sortedPlayers.map((p) => {
                   const wk = p.weekly_stats as Record<string, unknown> | null;
                   const ytd = p.season_totals;
                   const avg = p.season_weekly_avg;
@@ -692,6 +1028,106 @@ export default function PlayersPage() {
             </tbody>
           </table>
         </div>
+        </div>
+
+        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+          <details className="rounded-lg border border-border bg-card/70 p-3 text-sm shadow-sm backdrop-blur-sm">
+            <summary className="cursor-pointer select-none font-semibold text-fg">
+              Advanced sorting
+            </summary>
+            <div className="mt-3 space-y-3 text-muted">
+              <p className="text-xs leading-relaxed text-muted">
+                Add multiple sort levels in order (e.g. YTD passing yards, then
+                age). Uses the same column keys as the table. Applies only to the
+                current page ({PAGE_SIZE} rows per request).
+              </p>
+              <div className="space-y-2">
+                {advancedSortRules.map((rule, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-bg/40 p-2"
+                  >
+                    <span className="w-5 shrink-0 text-center text-[11px] font-mono text-muted">
+                      {idx + 1}
+                    </span>
+                    <select
+                      className="input min-w-0 flex-1 py-1.5 text-xs"
+                      aria-label={`Sort column level ${idx + 1}`}
+                      value={rule.id}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setAdvancedSortRules((prev) => {
+                          const next = prev.slice();
+                          next[idx] = { ...next[idx], id };
+                          return next;
+                        });
+                      }}
+                    >
+                      {sortColumnOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="input w-[5.5rem] shrink-0 py-1.5 text-xs font-mono"
+                      aria-label={`Sort direction level ${idx + 1}`}
+                      value={rule.dir}
+                      onChange={(e) => {
+                        const dir = e.target.value as SortRule["dir"];
+                        setAdvancedSortRules((prev) => {
+                          const next = prev.slice();
+                          next[idx] = { ...next[idx], dir };
+                          return next;
+                        });
+                      }}
+                    >
+                      <option value="asc">Asc</option>
+                      <option value="desc">Desc</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn shrink-0 px-2 py-1 text-xs"
+                      title="Remove this sort level"
+                      onClick={() => {
+                        setAdvancedSortRules((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        );
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn text-xs"
+                  onClick={() => {
+                    setAdvancedSortRules((prev) => [
+                      ...prev,
+                      {
+                        id: PLAYER_SORT_IDS.full_name,
+                        dir: "asc",
+                      },
+                    ]);
+                  }}
+                >
+                  Add sort level
+                </button>
+                <button
+                  type="button"
+                  className="btn text-xs"
+                  disabled={advancedSortRules.length === 0}
+                  onClick={() => setAdvancedSortRules([])}
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </details>
+        </aside>
       </div>
 
       {players.isSuccess && total > PAGE_SIZE && (

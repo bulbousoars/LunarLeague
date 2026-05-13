@@ -63,6 +63,9 @@ func runWorker(ctx context.Context, cfg *config.Config) {
 		{name: "live-stats", every: 30 * time.Second, fn: func(ctx context.Context) error {
 			return scoringSvc.PollLiveStats(ctx, dp)
 		}},
+		{name: "stats-season-backfill", every: 24 * time.Hour, fn: func(ctx context.Context) error {
+			return scoringSvc.BackfillRegularSeasonStats(ctx, dp)
+		}},
 		{name: "waiver-processor", every: 5 * time.Minute, fn: func(ctx context.Context) error {
 			return waiverSvc.ProcessDue(ctx)
 		}},
