@@ -22,6 +22,9 @@ export default function NewLeaguePage() {
     league_format: "redraft" as "redraft" | "keeper",
     draft_format: "snake" as "snake" | "auction",
     team_count: 12,
+    schedule_type: "h2h_points" as
+      | "h2h_points"
+      | "theme_ball",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,11 @@ export default function NewLeaguePage() {
         method: "POST",
         body: JSON.stringify(form),
       });
-      router.replace(`/leagues/${created.id}/setup`);
+      const next =
+        form.schedule_type === "theme_ball"
+          ? `/leagues/${created.id}/themes`
+          : `/leagues/${created.id}/setup`;
+      router.replace(next);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         const next = safeRedirectPath("/leagues/new");
@@ -160,6 +167,27 @@ export default function NewLeaguePage() {
               </div>
             </div>
             <div>
+              <label className="label">Scoring mode</label>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <FormatChoice
+                  label="Head-to-head points"
+                  desc="Classic weekly matchups."
+                  selected={form.schedule_type === "h2h_points"}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, schedule_type: "h2h_points" }))
+                  }
+                />
+                <FormatChoice
+                  label="Theme Ball"
+                  desc="H2H points plus optional roster-identity modifiers."
+                  selected={form.schedule_type === "theme_ball"}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, schedule_type: "theme_ball" }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
               <label className="label">Team count</label>
               <select
                 className="input"
@@ -201,6 +229,14 @@ export default function NewLeaguePage() {
               <Row label="Season" value={String(form.season)} />
               <Row label="Format" value={form.league_format} />
               <Row label="Draft" value={form.draft_format} />
+              <Row
+                label="Scoring"
+                value={
+                  form.schedule_type === "theme_ball"
+                    ? "Theme Ball"
+                    : "H2H points"
+                }
+              />
               <Row label="Teams" value={String(form.team_count)} />
             </dl>
             {error && <div className="text-sm text-red-400">{error}</div>}

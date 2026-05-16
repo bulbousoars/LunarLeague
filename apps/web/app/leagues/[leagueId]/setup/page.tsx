@@ -72,16 +72,21 @@ export default function LeagueSetupPage() {
           </ul>
         </div>
 
-        <div className="mt-6 flex justify-between">
+        <div className="mt-6 flex flex-wrap justify-between gap-2">
           <Link href={`/leagues/${leagueId}`} className="btn-outline">
             Open league
           </Link>
-          <Link
-            href={`/leagues/${leagueId}/settings`}
-            className="btn-primary"
-          >
-            Configure settings
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/leagues/${leagueId}/themes`} className="btn-outline">
+              Theme Ball rules
+            </Link>
+            <Link
+              href={`/leagues/${leagueId}/settings`}
+              className="btn-primary"
+            >
+              Configure settings
+            </Link>
+          </div>
         </div>
       </div>
     </main>

@@ -21,6 +21,7 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/player"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/provider"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/scoring"
+	"github.com/bulbousoars/lunarleague/apps/api/internal/themes"
 	"github.com/bulbousoars/lunarleague/apps/api/internal/sport"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -59,6 +60,8 @@ func (s *Service) Mount(r chi.Router) {
 	r.Post("/leagues/{leagueID}/teams", s.createTeam)
 	r.Patch("/leagues/{leagueID}/teams/{teamID}", s.updateTeam)
 	r.Post("/leagues/{leagueID}/teams/{teamID}/claim", s.claimTeam)
+
+	s.mountThemes(r)
 }
 
 // --- Models ---
@@ -91,6 +94,7 @@ type Settings struct {
 	AuctionBudget     *int            `json:"auction_budget,omitempty"`
 	ScheduleType      string          `json:"schedule_type"`
 	PublicVisible     bool            `json:"public_visible"`
+	ThemeModifiers    themes.Config   `json:"theme_modifiers,omitempty"`
 }
 
 type Team struct {
@@ -120,6 +124,7 @@ type createReq struct {
 	LeagueFormat string `json:"league_format"`
 	DraftFormat  string `json:"draft_format"`
 	TeamCount    int    `json:"team_count"`
+	ScheduleType string `json:"schedule_type"`
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
@@ -183,10 +188,19 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		v := 200
 		auctionBudget = &v
 	}
+	scheduleType := req.ScheduleType
+	if scheduleType == "" {
+		scheduleType = "h2h_points"
+	}
+	themeMods := themes.Config{}
+	if scheduleType == "theme_ball" {
+		themeMods = themes.DefaultConfig()
+	}
+	themeJSON, _ := json.Marshal(themeMods)
 	_, err = tx.Exec(r.Context(), `
-		INSERT INTO league_settings (league_id, roster_slots, auction_budget)
-		VALUES ($1, $2::jsonb, $3)`,
-		league.ID, string(slotsJSON), auctionBudget)
+		INSERT INTO league_settings (league_id, roster_slots, auction_budget, schedule_type, theme_modifiers)
+		VALUES ($1, $2::jsonb, $3, $4, $5::jsonb)`,
+		league.ID, string(slotsJSON), auctionBudget, scheduleType, string(themeJSON))
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -346,19 +360,20 @@ func (s *Service) getSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		set  Settings
-		raw  []byte
-		auct *int
-		td   *int
+		set      Settings
+		raw      []byte
+		themeRaw []byte
+		auct     *int
+		td       *int
 	)
 	err := s.pool.QueryRow(r.Context(), `
 		SELECT roster_slots, waiver_type, waiver_budget, waiver_run_dow, waiver_run_hour,
 		       trade_deadline_week, playoff_start_week, playoff_team_count, keeper_count,
-		       auction_budget, schedule_type, public_visible
+		       auction_budget, schedule_type, public_visible, theme_modifiers
 		FROM league_settings WHERE league_id = $1`, id).
 		Scan(&raw, &set.WaiverType, &set.WaiverBudget, &set.WaiverRunDOW, &set.WaiverRunHour,
 			&td, &set.PlayoffStartWeek, &set.PlayoffTeamCount, &set.KeeperCount,
-			&auct, &set.ScheduleType, &set.PublicVisible)
+			&auct, &set.ScheduleType, &set.PublicVisible, &themeRaw)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return
@@ -366,6 +381,9 @@ func (s *Service) getSettings(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &set.RosterSlots)
 	set.AuctionBudget = auct
 	set.TradeDeadlineWeek = td
+	if cfg, err := themes.ParseConfig(themeRaw); err == nil {
+		set.ThemeModifiers = cfg
+	}
 	httpx.WriteJSON(w, http.StatusOK, set)
 }
 
@@ -742,6 +760,17 @@ func validateCreate(req *createReq) error {
 	}
 	if req.TeamCount < 4 || req.TeamCount > 20 || req.TeamCount%2 != 0 {
 		return errors.New("team_count must be even and 4..20")
+	}
+	switch req.ScheduleType {
+	case "", "h2h_points", "h2h_categories", "rotisserie", "theme_ball":
+		if req.ScheduleType == "" {
+			req.ScheduleType = "h2h_points"
+		}
+	default:
+		return errors.New("invalid schedule_type")
+	}
+	if req.ScheduleType == "theme_ball" && req.SportCode != "" && req.SportCode != "nfl" {
+		return errors.New("theme_ball is NFL only in v1")
 	}
 	return nil
 }

@@ -132,8 +132,50 @@ export type Settings = {
   playoff_team_count: number;
   keeper_count: number;
   auction_budget?: number | null;
-  schedule_type: "h2h_points" | "h2h_categories" | "rotisserie";
+  schedule_type:
+    | "h2h_points"
+    | "h2h_categories"
+    | "rotisserie"
+    | "theme_ball";
   public_visible: boolean;
+  theme_modifiers?: ThemeModifiersConfig;
+};
+
+export type ThemeModifierEntry = {
+  enabled: boolean;
+  strength?: number;
+  multiplier?: number;
+  min_starters?: number;
+};
+
+export type ThemeModifiersConfig = Record<string, ThemeModifierEntry>;
+
+export type ThemeCatalogEntry = {
+  slug: string;
+  name: string;
+  description: string;
+  available: boolean;
+};
+
+export type ThemeModifiersResponse = {
+  schedule_type: string;
+  modifiers: ThemeModifiersConfig;
+  enabled_count: number;
+};
+
+export type ThemeVote = {
+  id: string;
+  slug: string;
+  action: "enable" | "disable";
+  status: "open" | "passed" | "failed" | "cancelled";
+  opens_at: string;
+  closes_at: string;
+  yes_count: number;
+  no_count: number;
+  opened_by: string;
+  my_ballot?: boolean;
+  eligible_owners: number;
+  need_yes_votes: number;
 };
 
 export type DraftPick = {

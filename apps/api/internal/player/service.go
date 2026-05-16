@@ -137,8 +137,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	search := q.Get("q")
 	hasTeam := queryBool(q.Get("has_team"))
 	includeStats := queryBool(q.Get("include_stats"))
-	// Season for YTD + per-week averages (defaults 2025; override with aggregate_season).
-	aggSeason := 2025
+	aggSeason := DefaultAggregateSeason(sport)
 	if includeStats {
 		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
 			aggSeason = v
@@ -392,7 +391,12 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !statsResolved {
-		aggSeason := 2025
+		var sportCode string
+		_ = s.pool.QueryRow(r.Context(), `
+			SELECT lower(sp.code) FROM players p
+			JOIN sports sp ON sp.id = p.sport_id
+			WHERE p.id = $1`, id).Scan(&sportCode)
+		aggSeason := DefaultAggregateSeason(sportCode)
 		if v, err := strconv.Atoi(q.Get("aggregate_season")); err == nil && v >= 1990 && v <= 2100 {
 			aggSeason = v
 		}

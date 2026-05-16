@@ -14,7 +14,7 @@ import {
   statCell,
 } from "@/lib/player-stats";
 import { statColumnLabels } from "@/lib/stat-labels";
-import { positionsForSport } from "@/lib/sport-ui";
+import { defaultAggregateSeason, positionsForSport } from "@/lib/sport-ui";
 import { useAuth } from "@/lib/auth-context";
 import {
   PLAYER_SORT_IDS,
@@ -25,8 +25,6 @@ import {
 } from "@/lib/players-table-sort";
 
 const PAGE_SIZE = 100;
-/** Season summed for YTD + per-week avg columns (`player_stats`, week &gt; 0). */
-const AGGREGATE_STATS_SEASON = 2025;
 
 /** Sticky first column — must use opaque bg + border-separate on table for clean scroll. */
 const stickyPlayerTh =
@@ -147,10 +145,8 @@ export default function PlayersPage() {
   const [page, setPage] = useState(1);
   const [onlyWithTeam, setOnlyWithTeam] = useState(true);
   const [includeStats, setIncludeStats] = useState(true);
-  /** Stat window: default to aggregate season (2025); week optional — API picks latest week for that season. */
-  const [statsSeasonIn, setStatsSeasonIn] = useState(
-    String(AGGREGATE_STATS_SEASON),
-  );
+  /** Stat window: empty = aggregate season only; API picks latest week for YTD columns. */
+  const [statsSeasonIn, setStatsSeasonIn] = useState("");
   const [statsWeekIn, setStatsWeekIn] = useState("");
   const { user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
@@ -161,6 +157,10 @@ export default function PlayersPage() {
   });
 
   const sport = (league.data?.sport_code ?? "nfl").toLowerCase();
+  const defaultAggSeason = useMemo(
+    () => defaultAggregateSeason(sport),
+    [sport],
+  );
 
   const offset = (page - 1) * PAGE_SIZE;
 
@@ -174,7 +174,7 @@ export default function PlayersPage() {
     if (onlyWithTeam) q.set("has_team", "1");
     if (includeStats) {
       q.set("include_stats", "1");
-      q.set("aggregate_season", String(AGGREGATE_STATS_SEASON));
+      q.set("aggregate_season", String(defaultAggSeason));
       const ss = statsSeasonIn.trim();
       const sw = statsWeekIn.trim();
       if (ss !== "") {
@@ -192,6 +192,7 @@ export default function PlayersPage() {
     includeStats,
     statsSeasonIn,
     statsWeekIn,
+    defaultAggSeason,
   ]);
 
   const players = useQuery({
@@ -219,7 +220,7 @@ export default function PlayersPage() {
   }, [statsSeasonIn, statsWindows.data]);
 
   useEffect(() => {
-    setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
+    setStatsSeasonIn("");
     setStatsWeekIn("");
   }, [sport, leagueId]);
 
@@ -255,7 +256,7 @@ export default function PlayersPage() {
 
   const statKeys = players.data?.stat_columns ?? [];
   const aggSeasonShown =
-    players.data?.aggregate_season ?? AGGREGATE_STATS_SEASON;
+    players.data?.aggregate_season ?? defaultAggSeason;
   const statColGroup =
     includeStats && statKeys.length > 0 ? statKeys.length * 3 : 0;
   /** Identity + bio: name, #, pos, elig, team, status, injury, age, ht, wt, exp, college (+ GP when stats on). */
@@ -383,7 +384,7 @@ export default function PlayersPage() {
               setIncludeStats(on);
               setPage(1);
               if (on) {
-                setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
+                setStatsSeasonIn("");
                 setStatsWeekIn("");
               }
             }}
@@ -460,12 +461,12 @@ export default function PlayersPage() {
               className="btn text-xs"
               disabled={!league.isSuccess}
               onClick={() => {
-                setStatsSeasonIn(String(AGGREGATE_STATS_SEASON));
+                setStatsSeasonIn("");
                 setStatsWeekIn("");
                 setPage(1);
               }}
             >
-              Reset to {AGGREGATE_STATS_SEASON}
+              Reset to {defaultAggSeason} aggregate
             </button>
           </div>
         )}
@@ -493,7 +494,7 @@ export default function PlayersPage() {
               totals, and per-week averages (mean over weeks with a{" "}
               <code className="rounded bg-card px-1">player_stats</code> row,
               week &gt; 0). The stat window defaults to season{" "}
-              <span className="font-mono text-fg">{AGGREGATE_STATS_SEASON}</span>{" "}
+              <span className="font-mono text-fg">{defaultAggSeason}</span>{" "}
               (latest week for that season when you don&apos;t pick a week). Weekly
               stats never borrow a different season, so they stay aligned with YTD.
               If YTD or averages are blank for{" "}
