@@ -63,6 +63,9 @@ func runWorker(ctx context.Context, cfg *config.Config) {
 		{name: "live-stats", every: 30 * time.Second, fn: func(ctx context.Context) error {
 			return scoringSvc.PollLiveStats(ctx, dp)
 		}},
+		{name: "matchup-scoring", every: 1 * time.Minute, fn: func(ctx context.Context) error {
+			return scoringSvc.ScoreActiveWeeks(ctx)
+		}},
 		{name: "stats-season-backfill", every: 24 * time.Hour, fn: func(ctx context.Context) error {
 			return scoringSvc.BackfillRegularSeasonStats(ctx, dp)
 		}},

@@ -23,9 +23,10 @@
 
 ## Phase B — Scoring engine
 
-- [ ] Weekly context builder (starters, player attrs, games)
-- [ ] Implement calculators per slug (start with `franchise_stack_win`, comparative ranks)
-- [ ] Wire into matchup scoring + `theme_breakdown` JSON
+- [x] Weekly context builder (starters, player attrs, games)
+- [x] Implement calculators per slug (v1: `franchise_stack_win`, `heaviest_team`, `tallest_team`, `prime_87`, `veteran_floor`, `bird_caucus`)
+- [x] Wire into matchup scoring + `theme_breakdown` JSON (worker `matchup-scoring` job)
+- [ ] Remaining 24 theme slugs
 
 ## Phase C — Polish
 

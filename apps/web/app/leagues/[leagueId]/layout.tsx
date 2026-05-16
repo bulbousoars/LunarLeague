@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-const TABS = [
+const BASE_TABS = [
   { href: "", label: "Overview" },
   { href: "/team", label: "My Team" },
   { href: "/scoreboard", label: "Scoreboard" },
@@ -18,7 +18,9 @@ const TABS = [
   { href: "/trades", label: "Trades" },
   { href: "/chat", label: "Chat" },
   { href: "/settings", label: "Settings" },
-];
+] as const;
+
+const THEME_BALL_TAB = { href: "/themes", label: "Themes" } as const;
 
 export default function LeagueLayout({
   children,
@@ -43,6 +45,14 @@ export default function LeagueLayout({
   if (loading || !user) return null;
 
   const base = `/leagues/${params.leagueId}`;
+  const tabs =
+    league.data?.schedule_type === "theme_ball"
+      ? [
+          ...BASE_TABS.slice(0, 8),
+          THEME_BALL_TAB,
+          ...BASE_TABS.slice(8),
+        ]
+      : [...BASE_TABS];
 
   return (
     <div className="min-h-screen">
@@ -79,7 +89,7 @@ export default function LeagueLayout({
             )}
           </div>
           <nav className="-mb-px flex gap-1 overflow-x-auto">
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const href = `${base}${t.href}`;
               const active =
                 pathname === href ||

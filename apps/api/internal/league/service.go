@@ -78,6 +78,7 @@ type League struct {
 	TeamCount    int    `json:"team_count"`
 	InviteCode   string `json:"invite_code,omitempty"`
 	Status       string `json:"status"`
+	ScheduleType string `json:"schedule_type"`
 	CreatedBy    string `json:"created_by"`
 }
 
@@ -196,6 +197,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	if scheduleType == "theme_ball" {
 		themeMods = themes.DefaultConfig()
 	}
+	league.ScheduleType = scheduleType
 	themeJSON, _ := json.Marshal(themeMods)
 	_, err = tx.Exec(r.Context(), `
 		INSERT INTO league_settings (league_id, roster_slots, auction_budget, schedule_type, theme_modifiers)
@@ -275,9 +277,10 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.pool.Query(r.Context(), `
 		SELECT l.id, l.sport_id, sp.code, l.name, l.slug, l.season, l.league_format,
-		       l.draft_format, l.team_count, l.status, l.created_by
+		       l.draft_format, l.team_count, l.status, ls.schedule_type, l.created_by
 		FROM leagues l
 		JOIN sports sp ON sp.id = l.sport_id
+		JOIN league_settings ls ON ls.league_id = l.id
 		JOIN league_members m ON m.league_id = l.id
 		WHERE m.user_id = $1
 		ORDER BY l.created_at DESC`, uid)
@@ -290,7 +293,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l League
 		if err := rows.Scan(&l.ID, &l.SportID, &l.SportCode, &l.Name, &l.Slug, &l.Season,
-			&l.LeagueFormat, &l.DraftFormat, &l.TeamCount, &l.Status, &l.CreatedBy); err != nil {
+			&l.LeagueFormat, &l.DraftFormat, &l.TeamCount, &l.Status, &l.ScheduleType, &l.CreatedBy); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -313,11 +316,15 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 	var l League
 	err = s.pool.QueryRow(r.Context(), `
 		SELECT l.id, l.sport_id, sp.code, l.name, l.slug, l.season, l.league_format,
-		       l.draft_format, l.team_count, l.invite_code, l.status, l.created_by
-		FROM leagues l JOIN sports sp ON sp.id = l.sport_id
+		       l.draft_format, l.team_count, l.invite_code, l.status,
+		       ls.schedule_type, l.created_by
+		FROM leagues l
+		JOIN sports sp ON sp.id = l.sport_id
+		JOIN league_settings ls ON ls.league_id = l.id
 		WHERE l.id = $1`, id).
 		Scan(&l.ID, &l.SportID, &l.SportCode, &l.Name, &l.Slug, &l.Season,
-			&l.LeagueFormat, &l.DraftFormat, &l.TeamCount, &l.InviteCode, &l.Status, &l.CreatedBy)
+			&l.LeagueFormat, &l.DraftFormat, &l.TeamCount, &l.InviteCode, &l.Status,
+			&l.ScheduleType, &l.CreatedBy)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return

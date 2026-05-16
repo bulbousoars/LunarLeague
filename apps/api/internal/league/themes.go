@@ -13,7 +13,17 @@ import (
 	"github.com/bulbousoars/lunarleague/apps/api/internal/themes"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+var errNotThemeBall = errors.New("league is not Theme Ball")
+
+func requireThemeBall(scheduleType string) error {
+	if scheduleType != "theme_ball" {
+		return errNotThemeBall
+	}
+	return nil
+}
 
 func (s *Service) mountThemes(r chi.Router) {
 	r.Get("/meta/theme-catalog", s.themeCatalog)
@@ -51,6 +61,10 @@ func (s *Service) getThemeModifiers(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return
 	}
+	if err := requireThemeBall(st); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
 	cfg, err := themes.ParseConfig(raw)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
@@ -83,8 +97,8 @@ func (s *Service) patchThemeModifiers(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, err)
 		return
 	}
-	if st != "theme_ball" {
-		httpx.WriteError(w, http.StatusBadRequest, errors.New("league is not Theme Ball"))
+	if err := requireThemeBall(st); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 	var req patchThemeModifiersReq
@@ -236,8 +250,12 @@ func (s *Service) createThemeVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st, _, err := s.loadThemeModifiers(r.Context(), leagueID)
-	if err != nil || st != "theme_ball" {
-		httpx.WriteError(w, http.StatusBadRequest, errors.New("league is not Theme Ball"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusNotFound, err)
+		return
+	}
+	if err := requireThemeBall(st); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 	var req createThemeVoteReq
@@ -267,6 +285,11 @@ func (s *Service) createThemeVote(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
 		leagueID, req.Slug, req.Action, uid, closes).Scan(&id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			httpx.WriteError(w, http.StatusConflict, errors.New("an open vote already exists"))
+			return
+		}
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
 	}

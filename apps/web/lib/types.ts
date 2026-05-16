@@ -34,6 +34,11 @@ export type League = {
     | "in_season"
     | "playoffs"
     | "complete";
+  schedule_type?:
+    | "h2h_points"
+    | "h2h_categories"
+    | "rotisserie"
+    | "theme_ball";
   created_by: string;
 };
 
